@@ -1,0 +1,10 @@
+node_modules
+.nuxt
+.output
+dist
+.DS_Store
+.env
+.env.*
+coverage
+npm-debug.log*
+apps/api/data/

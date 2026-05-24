@@ -1,0 +1,209 @@
+<script setup lang="ts">
+import type {
+  ClientsOverview,
+  JuiceProduct,
+  Sale,
+  SalePaymentStatus,
+  SalesOverview,
+} from "@yowell/shared";
+import { formatCfa } from "@yowell/shared";
+
+const { data, pending, refresh } = await useApiFetch<SalesOverview>(
+  useApiUrl("/sales/overview"),
+  { key: "sales-overview" },
+);
+
+const { data: clientsData } = await useApiFetch<ClientsOverview>(
+  useApiUrl("/clients/overview"),
+  { key: "clients-for-sales" },
+);
+
+const { data: products } = await useApiFetch<JuiceProduct[]>(
+  useApiUrl("/stock/products"),
+  { key: "products-for-sales" },
+);
+
+const showSaleForm = ref(false);
+const SaleFormLazy = defineAsyncComponent(
+  () => import("~/components/SaleForm.vue"),
+);
+
+const clientOptions = computed(
+  () => clientsData.value?.clients.map((c) => ({ id: c.id, name: c.name })) ?? [],
+);
+
+async function onSaleSuccess() {
+  await Promise.all([
+    refresh(),
+    refreshNuxtData("clients-overview"),
+  ]);
+  showSaleForm.value = false;
+}
+
+const updatingPaymentId = ref<string | null>(null);
+const { generatingId: generatingInvoiceId, downloadInvoice } = useSaleInvoice();
+
+function paymentLabel(status: SalePaymentStatus) {
+  return status === "paid" ? "Payé" : "Non payé";
+}
+
+async function markAsPaid(sale: Sale) {
+  if (sale.paymentStatus === "paid") return;
+  updatingPaymentId.value = sale.id;
+  try {
+    await apiFetch(useApiUrl(`/sales/${sale.id}/payment-status`), {
+      method: "PATCH",
+      body: { paymentStatus: "paid" satisfies SalePaymentStatus },
+    });
+    await Promise.all([
+      refresh(),
+      refreshNuxtData("accounting-overview"),
+      refreshNuxtData("clients-overview"),
+    ]);
+  } finally {
+    updatingPaymentId.value = null;
+  }
+}
+</script>
+
+<template>
+  <div>
+    <PageHeader
+      title="Ventes"
+      description="Enregistre les commandes — marque « Payé » pour comptabiliser l'encaissement."
+    />
+
+    <p v-if="pending" class="loading">Chargement des ventes</p>
+
+    <template v-else>
+      <div class="stats-grid">
+        <StatCard
+          label="Ventes aujourd'hui"
+          :value="data?.salesToday ?? 0"
+          icon="🛒"
+          tone="green"
+        />
+        <StatCard
+          label="Encaissé aujourd'hui"
+          :value="formatCfa(data?.revenueToday ?? 0)"
+          icon="💰"
+          tone="orange"
+        />
+        <StatCard
+          label="Encaissé (mois)"
+          :value="formatCfa(data?.revenueMonth ?? 0)"
+          icon="📈"
+          tone="blue"
+        />
+      </div>
+
+      <div class="stock-actions">
+        <button
+          type="button"
+          class="btn btn--primary"
+          @click="showSaleForm = !showSaleForm"
+        >
+          {{ showSaleForm ? "Masquer le formulaire" : "+ Enregistrer une vente" }}
+        </button>
+        <NuxtLink to="/clients" class="btn btn--secondary">
+          Gérer les clients →
+        </NuxtLink>
+      </div>
+
+      <section v-if="showSaleForm" class="panel collapsible-panel">
+        <h2 class="panel__title">Nouvelle vente</h2>
+        <p
+          v-if="!clientOptions.length"
+          class="form-error"
+          style="margin-bottom: 1rem"
+        >
+          Aucun client —
+          <NuxtLink to="/clients">crée un client</NuxtLink>
+          avant d'enregistrer une vente.
+        </p>
+        <SaleFormLazy
+          v-else
+          :clients="clientOptions"
+          :products="products ?? []"
+          @success="onSaleSuccess"
+        />
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">Historique des ventes</h2>
+        <div v-if="data?.recentSales.length" class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Commande</th>
+                <th>Total</th>
+                <th>Paiement</th>
+                <th>Notes</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="sale in data.recentSales" :key="sale.id">
+                <td>
+                  {{ new Date(sale.orderedAt).toLocaleDateString("fr-FR") }}
+                </td>
+                <td>{{ sale.clientName }}</td>
+                <td>
+                  <ul class="sale-items-list">
+                    <li v-for="(item, i) in sale.items" :key="i">
+                      {{ item.quantity }}× {{ item.productName }} ({{ item.volume }})
+                      — {{ formatCfa(item.lineTotal) }}
+                    </li>
+                  </ul>
+                </td>
+                <td><strong>{{ formatCfa(sale.totalAmount) }}</strong></td>
+                <td class="payment-cell">
+                  <span
+                    class="badge"
+                    :class="{
+                      'badge--paid': sale.paymentStatus === 'paid',
+                      'badge--unpaid': sale.paymentStatus === 'unpaid',
+                    }"
+                  >
+                    {{ paymentLabel(sale.paymentStatus) }}
+                  </span>
+                  <button
+                    v-if="sale.paymentStatus === 'unpaid'"
+                    type="button"
+                    class="btn btn--primary btn--sm payment-cell__action"
+                    :disabled="updatingPaymentId === sale.id"
+                    @click="markAsPaid(sale)"
+                  >
+                    {{
+                      updatingPaymentId === sale.id
+                        ? "…"
+                        : "Marquer payé"
+                    }}
+                  </button>
+                </td>
+                <td>{{ sale.notes || "—" }}</td>
+                <td class="table-actions">
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    :disabled="generatingInvoiceId === sale.id"
+                    @click="downloadInvoice(sale)"
+                  >
+                    {{
+                      generatingInvoiceId === sale.id
+                        ? "PDF…"
+                        : "Facture"
+                    }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <EmptyState v-else message="Aucune vente enregistrée." />
+      </section>
+    </template>
+  </div>
+</template>

@@ -1,0 +1,26 @@
+{
+  "name": "@yowell/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
+    }
+  },
+  "scripts": {
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "prepare": "npm run build",
+    "typecheck": "tsc -p tsconfig.cjs.json --noEmit",
+    "test": "echo \"Add shared package tests\""
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

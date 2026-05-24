@@ -1,0 +1,16 @@
+{
+  "name": "yowell-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dashboard activity monorepo (Nuxt + Nest)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present --parallel",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
