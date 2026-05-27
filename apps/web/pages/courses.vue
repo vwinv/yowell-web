@@ -58,11 +58,13 @@ function cancelEditRun() {
 const savingRemaining = ref<string | null>(null);
 const editingRemaining = ref<string | null>(null);
 const remainingDrafts = ref<Record<string, string>>({});
+const remainingInitialStockDrafts = ref<Record<string, number | "">>({});
 
 function openRemainingEditor(runId: string, item: DeliveryRunLine) {
   const key = itemKey(runId, item.id);
   editingRemaining.value = key;
   remainingDrafts.value[key] = item.remainingNote ?? "";
+  remainingInitialStockDrafts.value[key] = item.initialRemainingStock ?? item.quantity;
 }
 
 async function persistRemaining(
@@ -70,6 +72,7 @@ async function persistRemaining(
   item: DeliveryRunLine,
   hasRemaining: boolean,
   remainingNote?: string,
+  initialRemainingStock?: number,
 ) {
   const key = itemKey(runId, item.id);
   savingRemaining.value = key;
@@ -80,15 +83,22 @@ async function persistRemaining(
       body: {
         itemId: item.id,
         hasRemaining,
-        ...(hasRemaining ? { remainingNote: remainingNote?.trim() } : {}),
+        ...(hasRemaining
+          ? {
+              remainingNote: remainingNote?.trim(),
+              initialRemainingStock,
+            }
+          : {}),
       },
     });
 
     item.hasRemaining = hasRemaining;
     if (hasRemaining && remainingNote?.trim()) {
       item.remainingNote = remainingNote.trim();
+      item.initialRemainingStock = initialRemainingStock;
     } else {
       delete item.remainingNote;
+      delete item.initialRemainingStock;
     }
 
     editingRemaining.value = null;
@@ -103,11 +113,16 @@ async function persistRemaining(
 async function saveRemainingNote(runId: string, item: DeliveryRunLine) {
   const key = itemKey(runId, item.id);
   const note = remainingDrafts.value[key]?.trim();
+  const initialStock = Number(remainingInitialStockDrafts.value[key]);
   if (!note) {
     alert("Indique ce qu'il reste (ex. quantité ou conditionnement).");
     return;
   }
-  await persistRemaining(runId, item, true, note);
+  if (!Number.isFinite(initialStock) || initialStock <= 0) {
+    alert("Indique un stock initial restant valide.");
+    return;
+  }
+  await persistRemaining(runId, item, true, note, initialStock);
 }
 
 async function markNoRemaining(runId: string, item: DeliveryRunLine) {
@@ -186,6 +201,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
               <tr>
                 <th>Article (course)</th>
                 <th>Qté achetée</th>
+                <th>Stock initial restant</th>
                 <th>Ce qu'il reste</th>
                 <th>Course du</th>
                 <th />
@@ -198,6 +214,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
               >
                 <td>{{ entry.label }}</td>
                 <td>{{ entry.quantity }}</td>
+                <td>{{ entry.initialRemainingStock ?? "—" }}</td>
                 <td>
                   <strong v-if="entry.remainingNote" class="remaining-note-text">
                     {{ entry.remainingNote }}
@@ -304,6 +321,10 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                           class="remaining-saved"
                         >
                           <p class="remaining-note-display">
+                            <span class="remaining-note-label">Stock initial :</span>
+                            {{ item.initialRemainingStock ?? "—" }}
+                          </p>
+                          <p class="remaining-note-display">
                             <span class="remaining-note-label">Reste :</span>
                             {{ item.remainingNote || "—" }}
                           </p>
@@ -338,6 +359,18 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                             class="table-input remaining-note-input"
                             placeholder="Ex. 2 kg d'oranges, 3 bouteilles…"
                             @keyup.enter="saveRemainingNote(run.id, item)"
+                          />
+                          <label class="sr-only" :for="`remaining-stock-${item.id}`">
+                            Stock initial restant
+                          </label>
+                          <input
+                            :id="`remaining-stock-${item.id}`"
+                            v-model.number="remainingInitialStockDrafts[itemKey(run.id, item.id)]"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            class="table-input remaining-note-input"
+                            placeholder="Stock initial restant (ex. 2.5)"
                           />
                           <div class="remaining-actions">
                             <button

@@ -246,6 +246,8 @@ export type DeliveryRunLine = {
   hasRemaining?: boolean;
   /** Détail de ce qu'il reste (obligatoire si hasRemaining === true) */
   remainingNote?: string;
+  /** Stock initial restant constaté au moment de la saisie */
+  initialRemainingStock?: number;
 };
 
 export type DeliveryRunFee = {
@@ -270,6 +272,7 @@ export type DeliveryRemainingItem = {
   itemId: string;
   label: string;
   quantity: number;
+  initialRemainingStock?: number;
   remainingNote: string;
 };
 
@@ -303,6 +306,7 @@ export type UpdateDeliveryItemRemainingInput = {
   itemId: string;
   hasRemaining: boolean;
   remainingNote?: string;
+  initialRemainingStock?: number;
 };
 
 export function deliveryRunTotal(items: DeliveryRunLine[]): number {
@@ -321,6 +325,7 @@ export function buildDeliveryRemainingItems(runs: DeliveryRun[]): DeliveryRemain
         itemId: item.id,
         label: item.label,
         quantity: item.quantity,
+        initialRemainingStock: item.initialRemainingStock,
         remainingNote: item.remainingNote?.trim() ?? "",
       });
     }

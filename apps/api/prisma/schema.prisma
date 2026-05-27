@@ -222,6 +222,7 @@ model DeliveryRunItem {
   lineTotal     Int
   hasRemaining  Boolean?
   remainingNote String?
+  initialRemainingStock Float?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   run           DeliveryRun @relation(fields: [runId], references: [id], onDelete: Cascade)

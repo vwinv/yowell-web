@@ -48,17 +48,33 @@ export function withAuthHeaders(
 }
 
 /** $fetch avec jeton JWT — fonctionne aussi dans useAsyncData */
+type ApiFetchOptions<T> = Parameters<typeof $fetch<T>>[1] & {
+  autoReload?: boolean;
+};
+
 export function apiFetch<T>(
   url: string,
-  options: Parameters<typeof $fetch<T>>[1] = {},
+  options: ApiFetchOptions<T> = {},
 ) {
   const token = useAuthToken();
+  const { autoReload = true, ...fetchOptions } = options;
+
+  const requestMethod = String(fetchOptions.method ?? "GET").toUpperCase();
+  const shouldReload =
+    autoReload &&
+    ["POST", "PATCH", "PUT", "DELETE"].includes(requestMethod);
+
   return $fetch<T>(url, {
-    ...options,
+    ...fetchOptions,
     headers: withAuthHeaders(
-      options.headers as HeadersInit | undefined,
+      fetchOptions.headers as HeadersInit | undefined,
       token.value,
     ),
+  }).then((result) => {
+    if (shouldReload && import.meta.client) {
+      window.location.reload();
+    }
+    return result;
   });
 }
 

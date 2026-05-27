@@ -182,11 +182,16 @@ export class DeliveriesService {
       if (!note) {
         throw new BadRequestException("Indique ce qu'il reste pour cet article.");
       }
+      const initialStock = input.initialRemainingStock ?? item.quantity;
+      if (!Number.isFinite(initialStock) || initialStock <= 0) {
+        throw new BadRequestException("Le stock initial restant doit être supérieur à 0.");
+      }
       await this.prisma.deliveryRunItem.update({
         where: { id: item.id },
         data: {
           hasRemaining: true,
           remainingNote: note,
+          initialRemainingStock: initialStock,
         },
       });
     } else {
@@ -195,6 +200,7 @@ export class DeliveriesService {
         data: {
           hasRemaining: false,
           remainingNote: null,
+          initialRemainingStock: null,
         },
       });
     }

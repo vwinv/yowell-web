@@ -226,6 +226,7 @@ function mapDeliveryRunLine(
     lineTotal: item.lineTotal,
     hasRemaining: item.hasRemaining ?? undefined,
     remainingNote: item.remainingNote ?? undefined,
+    initialRemainingStock: item.initialRemainingStock ?? undefined,
   };
 }
 
