@@ -27,8 +27,8 @@ export class DeliveriesController {
   }
 
   @Delete(":id")
-  delete(@Param("id") id: string) {
-    this.deliveriesService.delete(id);
+  async delete(@Param("id") id: string) {
+    await this.deliveriesService.delete(id);
     return { ok: true };
   }
 }

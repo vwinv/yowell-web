@@ -11,28 +11,38 @@ import type {
   ManualAccountingEntry,
   UpdateCaisseInput,
 } from "@yowell/shared";
-import { randomUUID } from "node:crypto";
 
 import { DeliveriesService } from "../deliveries/deliveries.service";
+import {
+  mapManualAccountingEntry,
+  toPrismaAccountingEntryType,
+} from "../prisma/prisma.mappers";
+import { PrismaService } from "../prisma/prisma.service";
 import { SalesService } from "../sales/sales.service";
-import { AccountingStore } from "./accounting.store";
 
 @Injectable()
 export class AccountingService implements OnModuleInit {
-  private readonly store = new AccountingStore();
-
   constructor(
+    private readonly prisma: PrismaService,
     private readonly salesService: SalesService,
     private readonly deliveriesService: DeliveriesService,
   ) {}
 
-  onModuleInit() {
-    this.store.load();
+  async onModuleInit() {
+    await this.ensureState();
   }
 
-  getOverview(): AccountingOverview {
-    const caisse = this.getCaisse();
-    const entries = this.buildLedger(caisse);
+  private async ensureState() {
+    return this.prisma.accountingState.upsert({
+      where: { id: "default" },
+      update: {},
+      create: { id: "default" },
+    });
+  }
+
+  async getOverview(): Promise<AccountingOverview> {
+    const caisse = await this.getCaisse();
+    const entries = await this.buildLedger(caisse);
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
@@ -76,25 +86,40 @@ export class AccountingService implements OnModuleInit {
     };
   }
 
-  getCaisse(): number {
-    return this.store.getData().caisse;
+  async getCaisse(): Promise<number> {
+    const state = await this.ensureState();
+    return state.caisse;
   }
 
-  listManualEntries(): ManualAccountingEntry[] {
-    return [...this.store.getData().manualEntries];
+  async listManualEntries(): Promise<ManualAccountingEntry[]> {
+    const entries = await this.prisma.manualAccountingEntry.findMany({
+      orderBy: { date: "desc" },
+    });
+    return entries.map(mapManualAccountingEntry);
   }
 
-  updateCaisse(input: UpdateCaisseInput): number {
+  async updateCaisse(input: UpdateCaisseInput): Promise<number> {
     if (input.amount < 0) {
       throw new BadRequestException("Le montant de la caisse ne peut pas être négatif.");
     }
-    const data = this.store.getData();
-    data.caisse = Math.round(input.amount);
-    this.store.setData(data);
-    return data.caisse;
+
+    const state = await this.prisma.accountingState.upsert({
+      where: { id: "default" },
+      update: {
+        caisse: Math.round(input.amount),
+      },
+      create: {
+        id: "default",
+        caisse: Math.round(input.amount),
+      },
+    });
+
+    return state.caisse;
   }
 
-  createManual(input: CreateManualAccountingEntryInput): ManualAccountingEntry {
+  async createManual(
+    input: CreateManualAccountingEntryInput,
+  ): Promise<ManualAccountingEntry> {
     const label = input.label?.trim();
     if (!label) {
       throw new BadRequestException("Le libellé est obligatoire.");
@@ -106,33 +131,38 @@ export class AccountingService implements OnModuleInit {
       throw new BadRequestException("Type invalide (income ou expense).");
     }
 
-    const entry: ManualAccountingEntry = {
-      id: randomUUID(),
-      date: new Date(input.date).toISOString(),
-      label,
-      amount: Math.round(input.amount),
-      type: input.type,
-      createdAt: new Date().toISOString(),
-    };
+    const entry = await this.prisma.manualAccountingEntry.create({
+      data: {
+        date: new Date(input.date),
+        label,
+        amount: Math.round(input.amount),
+        type: toPrismaAccountingEntryType(input.type),
+      },
+    });
 
-    const data = this.store.getData();
-    data.manualEntries.push(entry);
-    this.store.setData(data);
-    return entry;
+    return mapManualAccountingEntry(entry);
   }
 
-  deleteManual(id: string): void {
-    const data = this.store.getData();
-    const index = data.manualEntries.findIndex((e) => e.id === id);
-    if (index === -1) {
+  async deleteManual(id: string): Promise<void> {
+    const existing = await this.prisma.manualAccountingEntry.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) {
       throw new NotFoundException("Écriture manuelle introuvable.");
     }
-    data.manualEntries.splice(index, 1);
-    this.store.setData(data);
+    await this.prisma.manualAccountingEntry.delete({
+      where: { id },
+    });
   }
 
-  private buildLedger(caisse: number): AccountingEntry[] {
+  private async buildLedger(caisse: number): Promise<AccountingEntry[]> {
     const entries: AccountingEntry[] = [];
+    const [sales, deliveries, manualEntries] = await Promise.all([
+      this.salesService.listAll(),
+      this.deliveriesService.listAll(),
+      this.listManualEntries(),
+    ]);
 
     entries.push({
       id: "caisse-opening",
@@ -143,7 +173,7 @@ export class AccountingService implements OnModuleInit {
       source: "caisse",
     });
 
-    for (const sale of this.salesService.listAll()) {
+    for (const sale of sales) {
       if (sale.paymentStatus !== "paid") continue;
       entries.push({
         id: `sale-${sale.id}`,
@@ -156,7 +186,7 @@ export class AccountingService implements OnModuleInit {
       });
     }
 
-    for (const run of this.deliveriesService.listAll()) {
+    for (const run of deliveries) {
       const dateLabel = new Date(run.date).toLocaleDateString("fr-FR", {
         day: "numeric",
         month: "short",
@@ -173,7 +203,7 @@ export class AccountingService implements OnModuleInit {
       });
     }
 
-    for (const manual of this.store.getData().manualEntries) {
+    for (const manual of manualEntries) {
       entries.push({
         id: `manual-${manual.id}`,
         date: manual.date,

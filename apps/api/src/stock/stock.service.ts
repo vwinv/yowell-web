@@ -2,76 +2,31 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import type {
   CreateJuiceProductInput,
   CreateProductionInput,
-  JuiceFormat,
   JuiceProduct,
   JuiceVolume,
   ProductionRecord,
   StockOverview,
 } from "@yowell/shared";
-import { randomUUID } from "node:crypto";
 
+import {
+  mapProduct,
+  mapProductionRecord,
+  toPrismaJuiceVolume,
+} from "../prisma/prisma.mappers";
+import { PrismaService } from "../prisma/prisma.service";
 import { deletePhotoFiles } from "./stock-upload";
 import { CreateProductDto } from "./dto/create-product.dto";
-import { StockStore } from "./stock.store";
 
-type LegacyProduct = JuiceProduct & {
-  volume?: JuiceVolume;
-  quantity?: number;
-  minQuantity?: number;
-};
+type StockDbClient = Prisma.TransactionClient | PrismaService;
 
 @Injectable()
-export class StockService implements OnModuleInit {
-  private readonly store = new StockStore();
-
-  onModuleInit() {
-    this.store.load();
-    this.migrateProducts();
-  }
-
-  private migrateProducts() {
-    const data = this.store.getData();
-    let changed = false;
-
-    for (const raw of data.products as LegacyProduct[]) {
-      if (raw.description === undefined) {
-        raw.description = "";
-        changed = true;
-      }
-      if (!raw.photoUrls) {
-        raw.photoUrls = [];
-        changed = true;
-      }
-      if (!raw.formats && raw.volume) {
-        raw.formats = [
-          {
-            volume: raw.volume,
-            price: 0,
-            quantity: raw.quantity ?? 0,
-            minQuantity: raw.minQuantity ?? 0,
-            enabled: true,
-          },
-        ];
-        delete raw.volume;
-        delete raw.quantity;
-        delete raw.minQuantity;
-        changed = true;
-      }
-      if (!raw.formats) {
-        raw.formats = [];
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      this.store.setData(data);
-    }
-  }
+export class StockService {
+  constructor(private readonly prisma: PrismaService) {}
 
   productFromDto(dto: CreateProductDto): CreateJuiceProductInput {
     const formats: CreateJuiceProductInput["formats"] = [];
@@ -106,8 +61,11 @@ export class StockService implements OnModuleInit {
     };
   }
 
-  getOverview(): StockOverview {
-    const { products, productions } = this.store.getData();
+  async getOverview(): Promise<StockOverview> {
+    const [products, productions] = await Promise.all([
+      this.listProducts(),
+      this.listProductions(),
+    ]);
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
@@ -143,123 +101,174 @@ export class StockService implements OnModuleInit {
     };
   }
 
-  listProducts(): JuiceProduct[] {
-    return this.store.getData().products;
+  async listProducts(): Promise<JuiceProduct[]> {
+    const products = await this.prisma.product.findMany({
+      include: {
+        formats: true,
+        photos: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return products.map(mapProduct);
   }
 
-  listProductions(): ProductionRecord[] {
-    return [...this.store.getData().productions].sort(
-      (a, b) =>
-        new Date(b.producedAt).getTime() - new Date(a.producedAt).getTime(),
-    );
+  async listProductions(): Promise<ProductionRecord[]> {
+    const productions = await this.prisma.productionRecord.findMany({
+      orderBy: { producedAt: "desc" },
+    });
+
+    return productions.map(mapProductionRecord);
   }
 
-  createProduct(
+  async createProduct(
     input: CreateJuiceProductInput,
     photoUrls: string[] = [],
-  ): JuiceProduct {
+  ): Promise<JuiceProduct> {
     if (!input.formats.length) {
       throw new BadRequestException("Au moins un format est requis.");
     }
 
-    const data = this.store.getData();
-    const formats: JuiceFormat[] = input.formats.map((f) => ({
-      volume: f.volume,
-      price: f.price,
-      quantity: 0,
-      minQuantity: f.minQuantity ?? 0,
-      enabled: true,
-    }));
+    const product = await this.prisma.product.create({
+      data: {
+        name: input.name.trim(),
+        description: input.description?.trim() ?? "",
+        formats: {
+          create: input.formats.map((format) => ({
+            volume: toPrismaJuiceVolume(format.volume),
+            price: format.price,
+            quantity: 0,
+            minQuantity: format.minQuantity ?? 0,
+            enabled: format.enabled,
+          })),
+        },
+        photos: {
+          create: photoUrls.map((url, index) => ({
+            url,
+            position: index,
+          })),
+        },
+      },
+      include: {
+        formats: true,
+        photos: true,
+      },
+    });
 
-    const product: JuiceProduct = {
-      id: randomUUID(),
-      name: input.name.trim(),
-      description: input.description?.trim() ?? "",
-      photoUrls,
-      formats,
-      createdAt: new Date().toISOString(),
-    };
-    data.products.push(product);
-    this.store.setData(data);
-    return product;
+    return mapProduct(product);
   }
 
-  recordProduction(input: CreateProductionInput): ProductionRecord {
-    const data = this.store.getData();
-    const product = data.products.find((p) => p.id === input.productId);
-    if (!product) {
-      throw new NotFoundException("Produit introuvable");
-    }
+  async recordProduction(input: CreateProductionInput): Promise<ProductionRecord> {
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.findUnique({
+        where: { id: input.productId },
+        include: { formats: true },
+      });
+      if (!product) {
+        throw new NotFoundException("Produit introuvable");
+      }
 
-    const format = product.formats.find(
-      (f) => f.volume === input.volume && f.enabled,
-    );
-    if (!format) {
-      throw new BadRequestException(
-        `Le format ${input.volume} n'est pas proposé pour ce produit.`,
+      const format = product.formats.find(
+        (item) =>
+          item.volume === toPrismaJuiceVolume(input.volume) && item.enabled,
       );
-    }
+      if (!format) {
+        throw new BadRequestException(
+          `Le format ${input.volume} n'est pas proposé pour ce produit.`,
+        );
+      }
 
-    const producedAt = input.producedAt
-      ? new Date(input.producedAt).toISOString()
-      : new Date().toISOString();
+      const producedAt = input.producedAt
+        ? new Date(input.producedAt)
+        : new Date();
 
-    const record: ProductionRecord = {
-      id: randomUUID(),
-      productId: product.id,
-      productName: product.name,
-      volume: input.volume,
-      quantity: input.quantity,
-      producedAt,
-      notes: input.notes?.trim() ?? "",
-      createdAt: new Date().toISOString(),
-    };
+      await tx.productFormat.update({
+        where: { id: format.id },
+        data: {
+          quantity: {
+            increment: input.quantity,
+          },
+        },
+      });
 
-    format.quantity += input.quantity;
-    data.productions.push(record);
-    this.store.setData(data);
-    return record;
+      const record = await tx.productionRecord.create({
+        data: {
+          productId: product.id,
+          productName: product.name,
+          volume: toPrismaJuiceVolume(input.volume),
+          quantity: input.quantity,
+          producedAt,
+          notes: input.notes?.trim() ?? "",
+        },
+      });
+
+      return mapProductionRecord(record);
+    });
   }
 
-  decrementStock(
+  async decrementStock(
     productId: string,
     volume: JuiceVolume,
     quantity: number,
-  ): void {
-    const data = this.store.getData();
-    const product = data.products.find((p) => p.id === productId);
+    db: StockDbClient = this.prisma,
+  ): Promise<void> {
+    const product = await db.product.findUnique({
+      where: { id: productId },
+      include: { formats: true },
+    });
     if (!product) {
       throw new NotFoundException("Produit introuvable");
     }
+
     const format = product.formats.find(
-      (f) => f.volume === volume && f.enabled,
+      (item) => item.volume === toPrismaJuiceVolume(volume) && item.enabled,
     );
     if (!format) {
       throw new BadRequestException(
         `Le format ${volume} n'est pas disponible pour ce produit.`,
       );
     }
-    if (format.quantity < quantity) {
+
+    const updated = await db.productFormat.updateMany({
+      where: {
+        id: format.id,
+        quantity: { gte: quantity },
+      },
+      data: {
+        quantity: {
+          decrement: quantity,
+        },
+      },
+    });
+    if (updated.count === 0) {
       throw new BadRequestException(
         `Stock insuffisant pour ${product.name} (${volume}) : ${format.quantity} disponible(s).`,
       );
     }
-    format.quantity -= quantity;
-    this.store.setData(data);
   }
 
-  listProductsForSales(): JuiceProduct[] {
-    return this.store.getData().products;
+  async listProductsForSales(): Promise<JuiceProduct[]> {
+    return this.listProducts();
   }
 
-  deleteProduct(id: string): void {
-    const data = this.store.getData();
-    const index = data.products.findIndex((p) => p.id === id);
-    if (index === -1) {
+  async deleteProduct(id: string): Promise<void> {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        formats: true,
+        photos: true,
+      },
+    });
+    if (!product) {
       throw new NotFoundException("Produit introuvable");
     }
-    const [removed] = data.products.splice(index, 1);
-    deletePhotoFiles(removed.photoUrls);
-    this.store.setData(data);
+
+    const photoUrls = product.photos.map((photo) => photo.url);
+
+    await this.prisma.product.delete({
+      where: { id },
+    });
+
+    deletePhotoFiles(photoUrls);
   }
 }

@@ -1,35 +1,36 @@
-import { Injectable, NotFoundException, OnModuleInit } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { SalePaymentStatus as PrismaSalePaymentStatus } from "@prisma/client";
 import type {
   Client,
   ClientSummary,
   ClientsOverview,
   CreateClientInput,
 } from "@yowell/shared";
-import { randomUUID } from "node:crypto";
 
-import { SalesStore } from "../sales/sales.store";
-import { ClientsStore } from "./clients.store";
+import { mapClient } from "../prisma/prisma.mappers";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
-export class ClientsService implements OnModuleInit {
-  private readonly store = new ClientsStore();
-  private readonly salesStore = new SalesStore();
+export class ClientsService {
+  constructor(private readonly prisma: PrismaService) {}
 
-  onModuleInit() {
-    this.store.load();
-    this.salesStore.load();
-  }
-
-  private buildClientSummaries(clients: Client[]): ClientSummary[] {
+  private buildClientSummaries(
+    clients: Client[],
+    sales: {
+      clientId: string;
+      totalAmount: number;
+      paymentStatus: PrismaSalePaymentStatus;
+    }[],
+  ): ClientSummary[] {
     const orderCountByClient = new Map<string, number>();
     const totalSpentByClient = new Map<string, number>();
 
-    for (const sale of this.salesStore.getData().sales) {
+    for (const sale of sales) {
       orderCountByClient.set(
         sale.clientId,
         (orderCountByClient.get(sale.clientId) ?? 0) + 1,
       );
-      if (sale.paymentStatus !== "paid") continue;
+      if (sale.paymentStatus !== PrismaSalePaymentStatus.PAID) continue;
       totalSpentByClient.set(
         sale.clientId,
         (totalSpentByClient.get(sale.clientId) ?? 0) + sale.totalAmount,
@@ -43,14 +44,23 @@ export class ClientsService implements OnModuleInit {
     }));
   }
 
-  getOverview(): ClientsOverview {
-    this.salesStore.load();
-    const { clients } = this.store.getData();
-    const sorted = [...clients].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-    const summaries = this.buildClientSummaries(sorted);
-    const totalOrders = this.salesStore.getData().sales.length;
+  async getOverview(): Promise<ClientsOverview> {
+    const [clientRows, sales] = await Promise.all([
+      this.prisma.client.findMany({
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.sale.findMany({
+        select: {
+          clientId: true,
+          totalAmount: true,
+          paymentStatus: true,
+        },
+      }),
+    ]);
+
+    const clients = clientRows.map(mapClient);
+    const summaries = this.buildClientSummaries(clients, sales);
+    const totalOrders = sales.length;
 
     return {
       clients: summaries,
@@ -59,41 +69,44 @@ export class ClientsService implements OnModuleInit {
     };
   }
 
-  list(): ClientSummary[] {
-    return this.getOverview().clients;
+  async list(): Promise<ClientSummary[]> {
+    return (await this.getOverview()).clients;
   }
 
-  findById(id: string): Client {
-    const client = this.store.getData().clients.find((c) => c.id === id);
+  async findById(id: string): Promise<Client> {
+    const client = await this.prisma.client.findUnique({
+      where: { id },
+    });
     if (!client) {
       throw new NotFoundException("Client introuvable");
     }
-    return client;
+    return mapClient(client);
   }
 
-  create(input: CreateClientInput): Client {
-    const data = this.store.getData();
-    const client: Client = {
-      id: randomUUID(),
-      name: input.name.trim(),
-      phone: input.phone?.trim() ?? "",
-      email: input.email?.trim() ?? "",
-      address: input.address?.trim() ?? "",
-      notes: input.notes?.trim() ?? "",
-      createdAt: new Date().toISOString(),
-    };
-    data.clients.push(client);
-    this.store.setData(data);
-    return client;
+  async create(input: CreateClientInput): Promise<Client> {
+    const client = await this.prisma.client.create({
+      data: {
+        name: input.name.trim(),
+        phone: input.phone?.trim() ?? "",
+        email: input.email?.trim() ?? "",
+        address: input.address?.trim() ?? "",
+        notes: input.notes?.trim() ?? "",
+      },
+    });
+
+    return mapClient(client);
   }
 
-  delete(id: string): void {
-    const data = this.store.getData();
-    const index = data.clients.findIndex((c) => c.id === id);
-    if (index === -1) {
+  async delete(id: string): Promise<void> {
+    const existing = await this.prisma.client.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) {
       throw new NotFoundException("Client introuvable");
     }
-    data.clients.splice(index, 1);
-    this.store.setData(data);
+    await this.prisma.client.delete({
+      where: { id },
+    });
   }
 }

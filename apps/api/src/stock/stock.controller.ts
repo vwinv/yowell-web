@@ -47,8 +47,8 @@ export class StockController {
   }
 
   @Delete("products/:id")
-  deleteProduct(@Param("id") id: string) {
-    this.stockService.deleteProduct(id);
+  async deleteProduct(@Param("id") id: string) {
+    await this.stockService.deleteProduct(id);
     return { ok: true };
   }
 

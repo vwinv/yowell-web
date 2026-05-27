@@ -13,7 +13,7 @@ export class ActivityController {
   getOverview(
     @CurrentUser() user: AuthUser,
     @Query("limit") limit?: string,
-  ): ActivityOverview {
+  ): Promise<ActivityOverview> {
     const parsed = limit ? Number.parseInt(limit, 10) : 150;
     return this.activityService.getOverview(
       user,

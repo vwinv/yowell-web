@@ -15,21 +15,25 @@ export class StatsService {
     private readonly accountingService: AccountingService,
   ) {}
 
-  getOverview(input: StatsPeriodInput): StatsOverview {
+  async getOverview(input: StatsPeriodInput): Promise<StatsOverview> {
     const period = resolveStatsPeriod(input);
     return this.computeOverview(period);
   }
 
   async generateReportPdf(input: StatsPeriodInput): Promise<Buffer> {
-    const overview = this.getOverview(input);
+    const overview = await this.getOverview(input);
     return buildStatsReportPdf(overview);
   }
 
-  private computeOverview(period: StatsOverview["period"]): StatsOverview {
+  private async computeOverview(
+    period: StatsOverview["period"],
+  ): Promise<StatsOverview> {
     const { from, to } = period;
-    const sales = this.salesService.listAll();
-    const deliveries = this.deliveriesService.listAll();
-    const manualEntries = this.accountingService.listManualEntries();
+    const [sales, deliveries, manualEntries] = await Promise.all([
+      this.salesService.listAll(),
+      this.deliveriesService.listAll(),
+      this.accountingService.listManualEntries(),
+    ]);
 
     let revenue = 0;
     let expenses = 0;

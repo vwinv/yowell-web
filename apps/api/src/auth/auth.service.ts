@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import type { AuthResponse } from "@yowell/shared";
+import type { AppUser, AuthResponse } from "@yowell/shared";
 
 import { UsersService } from "../users/users.service";
 import type { AuthUser } from "./auth-user";
@@ -31,7 +31,7 @@ export class AuthService {
     return { token, user };
   }
 
-  me(user: AuthUser) {
-    return this.usersService.toPublic(this.usersService.findById(user.id));
+  async me(user: AuthUser): Promise<AppUser> {
+    return this.usersService.toPublic(await this.usersService.findById(user.id));
   }
 }

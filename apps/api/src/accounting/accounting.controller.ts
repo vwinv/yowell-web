@@ -19,17 +19,17 @@ export class AccountingController {
   @Post("entries")
   createManual(
     @Body() body: CreateManualAccountingEntryInput,
-  ): ManualAccountingEntry {
+  ): Promise<ManualAccountingEntry> {
     return this.accountingService.createManual(body);
   }
 
   @Delete("entries/:id")
-  deleteManual(@Param("id") id: string): void {
+  deleteManual(@Param("id") id: string): Promise<void> {
     return this.accountingService.deleteManual(id);
   }
 
   @Patch("caisse")
-  updateCaisse(@Body() body: UpdateCaisseInput) {
-    return { caisse: this.accountingService.updateCaisse(body) };
+  async updateCaisse(@Body() body: UpdateCaisseInput) {
+    return { caisse: await this.accountingService.updateCaisse(body) };
   }
 }

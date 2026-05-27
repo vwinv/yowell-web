@@ -10,7 +10,7 @@ export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
   @Get("overview")
-  getOverview(@Query() query: StatsPeriodInput): StatsOverview {
+  getOverview(@Query() query: StatsPeriodInput): Promise<StatsOverview> {
     return this.statsService.getOverview(query);
   }
 

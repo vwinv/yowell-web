@@ -12,6 +12,7 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { ClientsModule } from "./clients/clients.module";
 import { DeliveriesModule } from "./deliveries/deliveries.module";
 import { SalesModule } from "./sales/sales.module";
+import { PrismaModule } from "./prisma/prisma.module";
 import { StatsModule } from "./stats/stats.module";
 import { StockModule } from "./stock/stock.module";
 import { UsersModule } from "./users/users.module";
@@ -19,6 +20,7 @@ import { UsersModule } from "./users/users.module";
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
     AuthModule,
     ActivityModule,
     UsersModule,

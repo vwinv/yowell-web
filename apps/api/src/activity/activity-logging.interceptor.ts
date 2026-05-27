@@ -93,13 +93,13 @@ export class ActivityLoggingInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap(() => {
-        this.activityService.log({
+        void this.activityService.log({
           user,
           action: actionLabel(method, path),
           summary: humanSummary(method, path),
           method,
           path,
-        });
+        }).catch(() => undefined);
       }),
     );
   }

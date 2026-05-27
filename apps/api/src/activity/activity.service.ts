@@ -1,9 +1,9 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import type { ActivityLogEntry, ActivityOverview } from "@yowell/shared";
-import { randomUUID } from "node:crypto";
 
 import type { AuthUser } from "../auth/auth-user";
-import { ActivityStore } from "./activity.store";
+import { mapActivityLogEntry, toPrismaUserRole } from "../prisma/prisma.mappers";
+import { PrismaService } from "../prisma/prisma.service";
 
 const TRACKED_PREFIXES = [
   "/api/sales",
@@ -43,48 +43,44 @@ export type LogActivityInput = {
 };
 
 @Injectable()
-export class ActivityService implements OnModuleInit {
-  private readonly store = new ActivityStore();
+export class ActivityService {
+  constructor(private readonly prisma: PrismaService) {}
 
-  onModuleInit() {
-    this.store.load();
+  async log(input: LogActivityInput): Promise<ActivityLogEntry> {
+    const entry = await this.prisma.activityLog.create({
+      data: {
+        userId: input.user.id,
+        userName: input.user.name,
+        userEmail: input.user.email,
+        action: input.action,
+        summary: input.summary,
+        method: input.method,
+        path: input.path,
+      },
+    });
+
+    return mapActivityLogEntry(entry);
   }
 
-  log(input: LogActivityInput): ActivityLogEntry {
-    const entry: ActivityLogEntry = {
-      id: randomUUID(),
-      userId: input.user.id,
-      userName: input.user.name,
-      userEmail: input.user.email,
-      action: input.action,
-      summary: input.summary,
-      method: input.method,
-      path: input.path,
-      createdAt: new Date().toISOString(),
-    };
-
-    const data = this.store.getData();
-    data.entries.unshift(entry);
-    this.store.setData(data);
-    return entry;
-  }
-
-  getOverview(
+  async getOverview(
     viewer: AuthUser,
     limit = 150,
-  ): ActivityOverview {
-    const { entries } = this.store.getData();
+  ): Promise<ActivityOverview> {
+    const entries = await this.prisma.activityLog.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+
     const byRole =
       viewer.role === "admin"
         ? entries
-        : entries.filter((e) => e.userId === viewer.id);
+        : entries.filter((entry) => entry.userId === viewer.id);
 
-    const filtered = byRole.filter((e) =>
-      isTrackedActivity(e.method, e.path),
+    const filtered = byRole.filter((entry) =>
+      isTrackedActivity(entry.method, entry.path),
     );
 
     return {
-      entries: filtered.slice(0, limit),
+      entries: filtered.slice(0, limit).map(mapActivityLogEntry),
       total: filtered.length,
     };
   }

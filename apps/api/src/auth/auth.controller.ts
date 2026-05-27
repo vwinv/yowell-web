@@ -18,7 +18,7 @@ export class AuthController {
   }
 
   @Get("me")
-  me(@CurrentUser() user: AuthUser): AppUser {
+  me(@CurrentUser() user: AuthUser): Promise<AppUser> {
     return this.authService.me(user);
   }
 }

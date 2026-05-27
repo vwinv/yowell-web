@@ -13,7 +13,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  list(): AppUser[] {
+  list(): Promise<AppUser[]> {
     return this.usersService.list();
   }
 
@@ -23,7 +23,7 @@ export class UsersController {
   }
 
   @Delete(":id")
-  deactivate(@Param("id") id: string): void {
-    this.usersService.deactivate(id);
+  async deactivate(@Param("id") id: string): Promise<void> {
+    await this.usersService.deactivate(id);
   }
 }

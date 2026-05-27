@@ -23,8 +23,8 @@ export class ClientsController {
   }
 
   @Delete(":id")
-  delete(@Param("id") id: string) {
-    this.clientsService.delete(id);
+  async delete(@Param("id") id: string) {
+    await this.clientsService.delete(id);
     return { ok: true };
   }
 }
