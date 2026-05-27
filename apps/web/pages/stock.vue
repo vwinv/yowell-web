@@ -209,6 +209,13 @@ function uploadUrl(path: string) {
 const selectedProduct = computed(() =>
   data.value?.products.find((p) => p.id === productionForm.productId),
 );
+const firstProduct = computed(() => data.value?.products[0] ?? null);
+const firstInventoryRow = computed(() => {
+  const product = firstProduct.value;
+  if (!product) return null;
+  const format = product.formats.find((x) => x.enabled) ?? null;
+  return { product, format };
+});
 
 const enabledFormats = computed((): JuiceFormat[] =>
   selectedProduct.value?.formats.filter((f) => f.enabled) ?? [],
@@ -595,7 +602,32 @@ async function removeProduct(id: string, name: string) {
             </button>
           </div>
         </div>
-        <div v-if="!isCatalogueCollapsed" class="product-cards">
+        <div v-if="isCatalogueCollapsed" class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Produit</th>
+                <th>Formats actifs</th>
+                <th>Stock total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="firstProduct">
+                <td>{{ firstProduct.name }}</td>
+                <td>
+                  {{
+                    firstProduct.formats
+                      .filter((x) => x.enabled)
+                      .map((f) => f.volume)
+                      .join(", ") || "—"
+                  }}
+                </td>
+                <td>{{ productTotalStock(firstProduct) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="product-cards">
           <article
             v-for="p in data.products"
             :key="p.id"
@@ -746,6 +778,68 @@ async function removeProduct(id: string, name: string) {
                   </td>
                 </tr>
               </template>
+            </tbody>
+          </table>
+        </div>
+        <div v-else-if="data?.products.length && isInventoryCollapsed" class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Photo</th>
+                <th>Produit</th>
+                <th>Description</th>
+                <th>Format</th>
+                <th>Prix (FCFA)</th>
+                <th>En stock</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="firstInventoryRow">
+                <td>
+                  <img
+                    v-if="firstInventoryRow.product.photoUrls[0]"
+                    :src="uploadUrl(firstInventoryRow.product.photoUrls[0])"
+                    :alt="firstInventoryRow.product.name"
+                    width="48"
+                    height="48"
+                    style="object-fit: cover; border-radius: 6px"
+                  />
+                  <span v-else>—</span>
+                </td>
+                <td>{{ firstInventoryRow.product.name }}</td>
+                <td>{{ firstInventoryRow.product.description || "—" }}</td>
+                <td>
+                  <span
+                    v-if="firstInventoryRow.format"
+                    class="volume-badge"
+                    :class="volumeClass(firstInventoryRow.format.volume)"
+                  >
+                    {{ firstInventoryRow.format.volume }}
+                  </span>
+                  <span v-else>—</span>
+                </td>
+                <td>{{ firstInventoryRow.format ? formatCfa(firstInventoryRow.format.price) : "—" }}</td>
+                <td :class="{ 'stock-low': firstInventoryRow.format ? isFormatLow(firstInventoryRow.format) : false }">
+                  {{ firstInventoryRow.format?.quantity ?? "—" }}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn btn--ghost"
+                    @click="startEditProduct(firstInventoryRow.product)"
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost"
+                    @click="removeProduct(firstInventoryRow.product.id, firstInventoryRow.product.name)"
+                  >
+                    Supprimer
+                  </button>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
