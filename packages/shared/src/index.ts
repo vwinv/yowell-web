@@ -184,7 +184,7 @@ export type CreateProductionInput = {
 };
 
 /** Comptabilité — entrées / sorties */
-export const DEFAULT_CAISSE_AMOUNT = 25_865;
+export const DEFAULT_CAISSE_AMOUNT = 19_350;
 
 export type AccountingEntrySource = "manual" | "sale" | "delivery" | "caisse";
 

@@ -2,6 +2,7 @@
 import type {
   DeliveriesOverview,
   DeliveryRemainingItem,
+  DeliveryRun,
   DeliveryRunLine,
 } from "@yowell/shared";
 import { deliveryRemainingCounts, formatCfa } from "@yowell/shared";
@@ -15,6 +16,16 @@ const showForm = ref(false);
 const DeliveryRunFormLazy = defineAsyncComponent(
   () => import("~/components/DeliveryRunForm.vue"),
 );
+const DeliveryRunEditFormLazy = defineAsyncComponent(
+  () => import("~/components/DeliveryRunEditForm.vue"),
+);
+
+const editingRunId = ref<string | null>(null);
+
+const editingRun = computed<DeliveryRun | null>(() => {
+  if (!editingRunId.value) return null;
+  return data.value?.runs.find((r) => r.id === editingRunId.value) ?? null;
+});
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", {
@@ -33,6 +44,15 @@ async function removeRun(id: string, dateLabel: string) {
   if (!confirm(`Supprimer la course du ${dateLabel} ?`)) return;
   await apiFetch(useApiUrl(`/deliveries/${id}`), { method: "DELETE" });
   await refresh();
+}
+
+function startEditRun(run: DeliveryRun) {
+  editingRunId.value = run.id;
+  showForm.value = false;
+}
+
+function cancelEditRun() {
+  editingRunId.value = null;
 }
 
 const savingRemaining = ref<string | null>(null);
@@ -209,7 +229,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
         <button
           type="button"
           class="btn btn--primary"
-          @click="showForm = !showForm"
+          @click="showForm = !showForm; editingRunId = null"
         >
           {{ showForm ? "Masquer le formulaire" : "+ Enregistrer une course" }}
         </button>
@@ -218,6 +238,15 @@ function isEditing(runId: string, item: DeliveryRunLine) {
       <section v-if="showForm" class="panel collapsible-panel">
         <h2 class="panel__title">Nouvelle course</h2>
         <DeliveryRunFormLazy @success="refresh(); showForm = false" />
+      </section>
+
+      <section v-if="editingRun" class="panel collapsible-panel">
+        <h2 class="panel__title">Modifier la course</h2>
+        <DeliveryRunEditFormLazy
+          :run="editingRun"
+          @success="refresh(); editingRunId = null"
+          @cancel="cancelEditRun"
+        />
       </section>
 
       <section class="panel">
@@ -383,6 +412,14 @@ function isEditing(runId: string, item: DeliveryRunLine) {
               </div>
 
               <div class="accordion__footer">
+                <button
+                  type="button"
+                  class="btn btn--ghost"
+                  style="margin-right: 0.5rem"
+                  @click="startEditRun(run)"
+                >
+                  Modifier
+                </button>
                 <button
                   type="button"
                   class="btn btn--ghost"

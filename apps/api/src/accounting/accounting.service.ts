@@ -4,6 +4,7 @@ import {
   NotFoundException,
   OnModuleInit,
 } from "@nestjs/common";
+import { DEFAULT_CAISSE_AMOUNT } from "@yowell/shared";
 import type {
   AccountingEntry,
   AccountingOverview,
@@ -33,11 +34,20 @@ export class AccountingService implements OnModuleInit {
   }
 
   private async ensureState() {
-    return this.prisma.accountingState.upsert({
+    const state = await this.prisma.accountingState.upsert({
       where: { id: "default" },
       update: {},
-      create: { id: "default" },
+      create: { id: "default", caisse: DEFAULT_CAISSE_AMOUNT },
     });
+
+    if (state.caisse === 25_865) {
+      return this.prisma.accountingState.update({
+        where: { id: "default" },
+        data: { caisse: DEFAULT_CAISSE_AMOUNT },
+      });
+    }
+
+    return state;
   }
 
   async getOverview(): Promise<AccountingOverview> {

@@ -18,6 +18,11 @@ export class DeliveriesController {
     return this.deliveriesService.create(dto);
   }
 
+  @Patch(":id")
+  update(@Param("id") id: string, @Body() dto: CreateDeliveryRunDto) {
+    return this.deliveriesService.update(id, dto);
+  }
+
   @Patch(":id/remaining")
   updateRemaining(
     @Param("id") id: string,

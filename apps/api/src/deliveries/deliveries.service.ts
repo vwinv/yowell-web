@@ -85,6 +85,76 @@ export class DeliveriesService {
     return mapDeliveryRun(run);
   }
 
+  async update(id: string, input: CreateDeliveryRunInput) {
+    if (!input.items.length) {
+      throw new BadRequestException("Ajoute au moins une ligne à la course.");
+    }
+
+    const existing = await this.prisma.deliveryRun.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException("Course introuvable");
+    }
+
+    const items = input.items.map((item) => ({
+      label: item.label.trim(),
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.quantity * item.unitPrice,
+    }));
+    const fees = (input.fees ?? [])
+      .filter((fee) => fee.label.trim() && fee.amount >= 0)
+      .map((fee) => ({
+        label: fee.label.trim(),
+        amount: Math.round(fee.amount),
+      }));
+
+    const totalAmount =
+      items.reduce((sum, item) => sum + item.lineTotal, 0) +
+      fees.reduce((sum, fee) => sum + fee.amount, 0);
+
+    const updatedRun = await this.prisma.$transaction(async (tx) => {
+      await tx.deliveryRunItem.deleteMany({ where: { runId: id } });
+      await tx.deliveryRunFee.deleteMany({ where: { runId: id } });
+
+      await tx.deliveryRun.update({
+        where: { id },
+        data: {
+          date: new Date(input.date),
+          totalAmount,
+        },
+      });
+
+      await tx.deliveryRunItem.createMany({
+        data: items.map((item) => ({
+          runId: id,
+          ...item,
+        })),
+      });
+      if (fees.length > 0) {
+        await tx.deliveryRunFee.createMany({
+          data: fees.map((fee) => ({
+            runId: id,
+            ...fee,
+          })),
+        });
+      }
+
+      return tx.deliveryRun.findUnique({
+        where: { id },
+        include: { items: true, fees: true },
+      });
+    });
+
+    if (!updatedRun) {
+      throw new NotFoundException("Course introuvable");
+    }
+
+    return mapDeliveryRun(updatedRun);
+  }
+
   async updateItemRemaining(
     runId: string,
     input: UpdateDeliveryItemRemainingInput,
