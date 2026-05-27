@@ -20,17 +20,21 @@ export class UsersService implements OnModuleInit {
   }
 
   private async seedDefaultAdmin() {
-    const count = await this.prisma.user.count();
-    if (count > 0) return;
-
-    const email = process.env.ADMIN_EMAIL ?? "admin@yowell.fr";
+    const email = (process.env.ADMIN_EMAIL ?? "admin@yowell.fr").trim().toLowerCase();
+    const name = (process.env.ADMIN_NAME ?? "Administrateur").trim() || "Administrateur";
     const password = process.env.ADMIN_PASSWORD ?? "admin123";
     const passwordHash = await bcrypt.hash(password, 10);
 
-    await this.prisma.user.create({
-      data: {
-        email: email.toLowerCase(),
-        name: "Administrateur",
+    await this.prisma.user.upsert({
+      where: { email },
+      update: {
+        name,
+        role: toPrismaUserRole("admin"),
+        active: true,
+      },
+      create: {
+        email,
+        name,
         passwordHash,
         role: toPrismaUserRole("admin"),
         active: true,
@@ -90,6 +94,31 @@ export class UsersService implements OnModuleInit {
       },
     });
     return this.toPublic(user);
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.findById(userId);
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) {
+      throw new BadRequestException("Mot de passe actuel incorrect.");
+    }
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException(
+        "Le nouveau mot de passe doit etre different de l'actuel.",
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 10),
+      },
+    });
   }
 
   async deactivate(id: string): Promise<void> {

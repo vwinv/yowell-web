@@ -76,6 +76,12 @@ export const navGroups: NavGroup[] = [
     title: "Système",
     items: [
       {
+        label: "Compte",
+        to: "/compte",
+        icon: "shield",
+        description: "Profil & mot de passe",
+      },
+      {
         label: "Journal",
         to: "/journal",
         icon: "history",

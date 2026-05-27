@@ -34,4 +34,16 @@ export class AuthService {
   async me(user: AuthUser): Promise<AppUser> {
     return this.usersService.toPublic(await this.usersService.findById(user.id));
   }
+
+  async changePassword(
+    user: AuthUser,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    await this.usersService.changePassword(
+      user.id,
+      currentPassword,
+      newPassword,
+    );
+  }
 }

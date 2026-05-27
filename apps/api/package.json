@@ -8,6 +8,7 @@
     "start:dev": "npm run dev",
     "build": "npm run prisma:generate && nest build",
     "render:build": "npm run prisma:generate && npm run prisma:push && nest build",
+    "render:start": "npm run prisma:push && node dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",

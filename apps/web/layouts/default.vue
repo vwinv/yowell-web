@@ -25,6 +25,9 @@ const currentPage = computed(() =>
           <div v-if="user" class="topbar__user">
             <span class="topbar__user-name">{{ user.name }}</span>
             <span v-if="isAdmin" class="badge badge--paid">Admin</span>
+            <NuxtLink to="/compte" class="btn btn--ghost btn--sm">
+              Mon compte
+            </NuxtLink>
             <button type="button" class="btn btn--ghost btn--sm" @click="logout()">
               Déconnexion
             </button>

@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post } from "@nestjs/common";
 import type { AppUser, AuthResponse } from "@yowell/shared";
 
 import type { AuthUser } from "./auth-user";
 import { AuthService } from "./auth.service";
 import { CurrentUser } from "./current-user.decorator";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { Public } from "./public.decorator";
 
@@ -20,5 +21,18 @@ export class AuthController {
   @Get("me")
   me(@CurrentUser() user: AuthUser): Promise<AppUser> {
     return this.authService.me(user);
+  }
+
+  @Patch("password")
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    await this.authService.changePassword(
+      user,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    return { ok: true };
   }
 }
