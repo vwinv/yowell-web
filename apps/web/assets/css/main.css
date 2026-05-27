@@ -1311,6 +1311,11 @@ tr.row--remaining-no td:first-child {
   border-left: 3px solid var(--border);
 }
 
+tr.row--fee td {
+  background: var(--bg);
+  color: var(--muted);
+}
+
 /* ——— Stock actions ——— */
 
 .stock-actions {
@@ -1529,6 +1534,32 @@ a.btn--secondary {
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
+}
+
+.product-card__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.product-card__summary-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+.product-card__summary-stock {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.product-card--collapsed .product-card__summary {
+  border-bottom: none;
 }
 
 .product-card__media {

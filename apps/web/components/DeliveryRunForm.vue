@@ -11,10 +11,16 @@ type LineDraft = {
   unitPrice: number | "";
 };
 
+type FeeDraft = {
+  label: string;
+  amount: number | "";
+};
+
 const date = ref(new Date().toISOString().slice(0, 10));
 const lines = ref<LineDraft[]>([
-  { label: "", quantity: 1, unitPrice: "" },
+  { label: "", quantity: 0.5, unitPrice: "" },
 ]);
+const fees = ref<FeeDraft[]>([]);
 
 const submitting = ref(false);
 const error = ref("");
@@ -28,9 +34,16 @@ function lineTotal(line: LineDraft): number {
 const courseTotal = computed(() =>
   lines.value.reduce((sum, line) => sum + lineTotal(line), 0),
 );
+const feesTotal = computed(() =>
+  fees.value.reduce(
+    (sum, fee) => sum + (fee.amount === "" ? 0 : Number(fee.amount)),
+    0,
+  ),
+);
+const grandTotal = computed(() => courseTotal.value + feesTotal.value);
 
 function addLine() {
-  lines.value.push({ label: "", quantity: 1, unitPrice: "" });
+  lines.value.push({ label: "", quantity: 0.5, unitPrice: "" });
 }
 
 function removeLine(index: number) {
@@ -38,9 +51,18 @@ function removeLine(index: number) {
   lines.value.splice(index, 1);
 }
 
+function addFee() {
+  fees.value.push({ label: "", amount: "" });
+}
+
+function removeFee(index: number) {
+  fees.value.splice(index, 1);
+}
+
 function resetForm() {
   date.value = new Date().toISOString().slice(0, 10);
-  lines.value = [{ label: "", quantity: 1, unitPrice: "" }];
+  lines.value = [{ label: "", quantity: 0.5, unitPrice: "" }];
+  fees.value = [];
 }
 
 async function submit() {
@@ -49,6 +71,9 @@ async function submit() {
 
   const validLines = lines.value.filter(
     (l) => l.label.trim() && l.quantity > 0 && l.unitPrice !== "",
+  );
+  const validFees = fees.value.filter(
+    (f) => f.label.trim() && f.amount !== "" && Number(f.amount) >= 0,
   );
   if (!validLines.length) {
     error.value = "Ajoute au moins une ligne avec libellé, quantité et prix.";
@@ -65,6 +90,10 @@ async function submit() {
           label: l.label.trim(),
           quantity: l.quantity,
           unitPrice: Number(l.unitPrice),
+        })),
+        fees: validFees.map((f) => ({
+          label: f.label.trim(),
+          amount: Number(f.amount),
         })),
       },
     });
@@ -116,7 +145,8 @@ async function submit() {
                   v-model.number="line.quantity"
                   type="number"
                   class="table-input table-input--narrow"
-                  min="1"
+                  min="0.01"
+                  step="0.01"
                   required
                 />
               </td>
@@ -165,7 +195,68 @@ async function submit() {
       </button>
     </fieldset>
 
+    <fieldset class="order-lines" style="margin-top: 1rem">
+      <legend class="order-lines__legend">Frais (optionnel)</legend>
+
+      <div class="table-wrap">
+        <table class="table course-lines-table">
+          <thead>
+            <tr>
+              <th>Libellé du frais</th>
+              <th>Montant (FCFA)</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(fee, index) in fees" :key="`fee-${index}`">
+              <td>
+                <input
+                  v-model="fee.label"
+                  type="text"
+                  class="table-input"
+                  placeholder="Ex. Transport, livraison..."
+                />
+              </td>
+              <td>
+                <input
+                  v-model.number="fee.amount"
+                  type="number"
+                  class="table-input table-input--narrow"
+                  min="0"
+                  step="1"
+                  placeholder="0"
+                />
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="btn btn--ghost"
+                  style="padding: 0.25rem 0.5rem; font-size: 0.8rem"
+                  @click="removeFee(index)"
+                >
+                  ×
+                </button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="course-table-footer-label"><strong>Total frais</strong></td>
+              <td colspan="2"><strong>{{ formatCfa(feesTotal) }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <button type="button" class="btn btn--ghost" style="margin-top: 0.75rem" @click="addFee">
+        + Ajouter un frais
+      </button>
+    </fieldset>
+
     <div class="form-actions" style="margin-top: 1.25rem">
+      <p style="margin-right: auto; font-weight: 600">
+        Total global : {{ formatCfa(grandTotal) }}
+      </p>
       <button type="submit" class="btn btn--primary" :disabled="submitting">
         {{ submitting ? "Enregistrement…" : "Enregistrer la course" }}
       </button>

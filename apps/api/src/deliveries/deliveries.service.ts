@@ -15,7 +15,7 @@ export class DeliveriesService {
 
   async listAll() {
     const runs = await this.prisma.deliveryRun.findMany({
-      include: { items: true },
+      include: { items: true, fees: true },
       orderBy: { date: "desc" },
     });
 
@@ -59,16 +59,27 @@ export class DeliveriesService {
       unitPrice: item.unitPrice,
       lineTotal: item.quantity * item.unitPrice,
     }));
+    const fees = (input.fees ?? [])
+      .filter((fee) => fee.label.trim() && fee.amount >= 0)
+      .map((fee) => ({
+        label: fee.label.trim(),
+        amount: Math.round(fee.amount),
+      }));
 
     const run = await this.prisma.deliveryRun.create({
       data: {
         date: new Date(input.date),
-        totalAmount: items.reduce((sum, item) => sum + item.lineTotal, 0),
+        totalAmount:
+          items.reduce((sum, item) => sum + item.lineTotal, 0) +
+          fees.reduce((sum, fee) => sum + fee.amount, 0),
         items: {
           create: items,
         },
+        fees: {
+          create: fees,
+        },
       },
-      include: { items: true },
+      include: { items: true, fees: true },
     });
 
     return mapDeliveryRun(run);
@@ -120,7 +131,7 @@ export class DeliveriesService {
 
     const updatedRun = await this.prisma.deliveryRun.findUnique({
       where: { id: runId },
-      include: { items: true },
+      include: { items: true, fees: true },
     });
     if (!updatedRun) {
       throw new NotFoundException("Course introuvable");

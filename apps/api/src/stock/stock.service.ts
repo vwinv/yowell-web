@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { JuiceVolume as PrismaJuiceVolume, type Prisma } from "@prisma/client";
 import type {
   CreateJuiceProductInput,
   CreateProductionInput,
@@ -156,6 +156,85 @@ export class StockService {
     });
 
     return mapProduct(product);
+  }
+
+  async updateProduct(
+    id: string,
+    input: CreateJuiceProductInput,
+  ): Promise<JuiceProduct> {
+    const existing = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        formats: true,
+        photos: true,
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException("Produit introuvable");
+    }
+
+    const desiredByVolume = new Map(
+      input.formats.map((format) => [
+        toPrismaJuiceVolume(format.volume),
+        format,
+      ]),
+    );
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: {
+          name: input.name.trim(),
+          description: input.description?.trim() ?? "",
+        },
+      });
+
+      const allVolumes = [PrismaJuiceVolume.ONE_L, PrismaJuiceVolume.ML_250];
+      for (const volume of allVolumes) {
+        const current = existing.formats.find((f) => f.volume === volume);
+        const desired = desiredByVolume.get(volume);
+
+        if (desired) {
+          if (current) {
+            await tx.productFormat.update({
+              where: { id: current.id },
+              data: {
+                price: desired.price,
+                minQuantity: desired.minQuantity ?? 0,
+                enabled: true,
+              },
+            });
+          } else {
+            await tx.productFormat.create({
+              data: {
+                productId: id,
+                volume,
+                price: desired.price,
+                minQuantity: desired.minQuantity ?? 0,
+                quantity: 0,
+                enabled: true,
+              },
+            });
+          }
+        } else if (current?.enabled) {
+          await tx.productFormat.update({
+            where: { id: current.id },
+            data: { enabled: false },
+          });
+        }
+      }
+
+      return tx.product.findUnique({
+        where: { id },
+        include: { formats: true, photos: true },
+      });
+    });
+
+    if (!updated) {
+      throw new NotFoundException("Produit introuvable");
+    }
+
+    return mapProduct(updated);
   }
 
   async recordProduction(input: CreateProductionInput): Promise<ProductionRecord> {

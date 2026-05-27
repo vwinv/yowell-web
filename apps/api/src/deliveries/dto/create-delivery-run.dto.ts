@@ -4,6 +4,7 @@ import {
   IsArray,
   IsDateString,
   IsNumber,
+  IsOptional,
   IsString,
   Min,
   MinLength,
@@ -16,12 +17,22 @@ export class CreateDeliveryRunLineDto {
   label!: string;
 
   @IsNumber()
-  @Min(1)
+  @Min(0.01)
   quantity!: number;
 
   @IsNumber()
   @Min(0)
   unitPrice!: number;
+}
+
+export class CreateDeliveryRunFeeDto {
+  @IsString()
+  @MinLength(1)
+  label!: string;
+
+  @IsNumber()
+  @Min(0)
+  amount!: number;
 }
 
 export class CreateDeliveryRunDto {
@@ -33,4 +44,10 @@ export class CreateDeliveryRunDto {
   @ValidateNested({ each: true })
   @Type(() => CreateDeliveryRunLineDto)
   items!: CreateDeliveryRunLineDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateDeliveryRunFeeDto)
+  fees?: CreateDeliveryRunFeeDto[];
 }

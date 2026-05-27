@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import type { AppUser } from "@yowell/shared";
 
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
 import { UsersService } from "./users.service";
 
 @Controller("users")
@@ -20,6 +21,14 @@ export class UsersController {
   @Post()
   create(@Body() dto: CreateUserDto): Promise<AppUser> {
     return this.usersService.create(dto);
+  }
+
+  @Patch(":id")
+  update(
+    @Param("id") id: string,
+    @Body() dto: UpdateUserDto,
+  ): Promise<AppUser> {
+    return this.usersService.update(id, dto);
   }
 
   @Delete(":id")

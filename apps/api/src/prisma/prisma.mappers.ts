@@ -10,6 +10,7 @@ import type {
   AppUser,
   Client,
   DeliveryRun,
+  DeliveryRunFee,
   DeliveryRunLine,
   JuiceFormat,
   JuiceProduct,
@@ -36,7 +37,7 @@ type PrismaManualAccountingEntryRecord = Prisma.ManualAccountingEntryGetPayload<
   Record<string, never>
 >;
 type PrismaDeliveryRunRecord = Prisma.DeliveryRunGetPayload<{
-  include: { items: true };
+  include: { items: true; fees: true };
 }>;
 
 function dateToIso(date: Date): string {
@@ -228,6 +229,16 @@ function mapDeliveryRunLine(
   };
 }
 
+function mapDeliveryRunFee(
+  fee: PrismaDeliveryRunRecord["fees"][number],
+): DeliveryRunFee {
+  return {
+    id: fee.id,
+    label: fee.label,
+    amount: fee.amount,
+  };
+}
+
 export function mapDeliveryRun(run: PrismaDeliveryRunRecord): DeliveryRun {
   return {
     id: run.id,
@@ -235,6 +246,9 @@ export function mapDeliveryRun(run: PrismaDeliveryRunRecord): DeliveryRun {
     items: [...run.items]
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map(mapDeliveryRunLine),
+    fees: [...run.fees]
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map(mapDeliveryRunFee),
     totalAmount: run.totalAmount,
     createdAt: dateToIso(run.createdAt),
   };

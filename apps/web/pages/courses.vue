@@ -362,6 +362,15 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                         </div>
                       </td>
                     </tr>
+                    <tr v-for="fee in run.fees" :key="`fee-${fee.id}`" class="row--fee">
+                      <td>
+                        <em>Frais: {{ fee.label }}</em>
+                      </td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td>{{ formatCfa(fee.amount) }}</td>
+                      <td />
+                    </tr>
                   </tbody>
                   <tfoot>
                     <tr>

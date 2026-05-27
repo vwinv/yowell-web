@@ -23,6 +23,13 @@ export type CreateUserInput = {
   role?: UserRole;
 };
 
+export type UpdateUserInput = {
+  email?: string;
+  name?: string;
+  password?: string;
+  role?: UserRole;
+};
+
 export type LoginInput = {
   email: string;
   password: string;
@@ -241,10 +248,17 @@ export type DeliveryRunLine = {
   remainingNote?: string;
 };
 
+export type DeliveryRunFee = {
+  id: string;
+  label: string;
+  amount: number;
+};
+
 export type DeliveryRun = {
   id: string;
   date: string;
   items: DeliveryRunLine[];
+  fees: DeliveryRunFee[];
   totalAmount: number;
   createdAt: string;
 };
@@ -274,9 +288,15 @@ export type CreateDeliveryRunLineInput = {
   unitPrice: number;
 };
 
+export type CreateDeliveryRunFeeInput = {
+  label: string;
+  amount: number;
+};
+
 export type CreateDeliveryRunInput = {
   date: string;
   items: CreateDeliveryRunLineInput[];
+  fees?: CreateDeliveryRunFeeInput[];
 };
 
 export type UpdateDeliveryItemRemainingInput = {

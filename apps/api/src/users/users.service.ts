@@ -5,7 +5,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import type { User as PrismaUser } from "@prisma/client";
-import type { AppUser, CreateUserInput } from "@yowell/shared";
+import type { AppUser, CreateUserInput, UpdateUserInput } from "@yowell/shared";
 import * as bcrypt from "bcrypt";
 
 import { mapUser, toPrismaUserRole } from "../prisma/prisma.mappers";
@@ -94,6 +94,41 @@ export class UsersService implements OnModuleInit {
       },
     });
     return this.toPublic(user);
+  }
+
+  async update(id: string, input: UpdateUserInput): Promise<AppUser> {
+    const existing = await this.findById(id);
+
+    const email = input.email?.trim().toLowerCase();
+    if (email && email !== existing.email) {
+      const conflict = await this.findByEmail(email);
+      if (conflict && conflict.id !== id) {
+        throw new BadRequestException("Un compte existe deja avec cet e-mail.");
+      }
+    }
+
+    const data: {
+      email?: string;
+      name?: string;
+      passwordHash?: string;
+      role?: ReturnType<typeof toPrismaUserRole>;
+    } = {};
+
+    if (email) data.email = email;
+    if (input.name?.trim()) data.name = input.name.trim();
+    if (input.password) {
+      data.passwordHash = await bcrypt.hash(input.password, 10);
+    }
+    if (input.role) {
+      data.role = toPrismaUserRole(input.role);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data,
+    });
+
+    return this.toPublic(updated);
   }
 
   async changePassword(

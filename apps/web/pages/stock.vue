@@ -27,6 +27,21 @@ const productionSuccess = ref("");
 
 const showProductForm = ref(false);
 const showProductionForm = ref(false);
+const collapsedProductIds = ref<string[]>([]);
+const editingProductId = ref<string | null>(null);
+const editSubmitting = ref(false);
+const editError = ref("");
+const editSuccess = ref("");
+const editForm = reactive({
+  name: "",
+  description: "",
+  format1LEnabled: true,
+  price1L: 0,
+  minQuantity1L: 0,
+  format250Enabled: false,
+  price250: 0,
+  minQuantity250: 0,
+});
 
 const ProductFormLazy = defineAsyncComponent(
   () => import("~/components/ProductForm.vue"),
@@ -36,17 +51,112 @@ const apiOrigin = useApiOrigin();
 
 function toggleProductForm() {
   showProductionForm.value = false;
+  editingProductId.value = null;
   showProductForm.value = !showProductForm.value;
 }
 
 function toggleProductionForm() {
   showProductForm.value = false;
+  editingProductId.value = null;
   showProductionForm.value = !showProductionForm.value;
 }
 
 function onProductSuccess() {
   refresh();
   showProductForm.value = false;
+}
+
+function isProductCollapsed(productId: string) {
+  return collapsedProductIds.value.includes(productId);
+}
+
+function toggleProductCollapsed(productId: string) {
+  if (isProductCollapsed(productId)) {
+    collapsedProductIds.value = collapsedProductIds.value.filter(
+      (id) => id !== productId,
+    );
+    return;
+  }
+  collapsedProductIds.value = [...collapsedProductIds.value, productId];
+}
+
+function collapseAllProducts() {
+  collapsedProductIds.value = (data.value?.products ?? []).map((p) => p.id);
+}
+
+function expandAllProducts() {
+  collapsedProductIds.value = [];
+}
+
+function startEditProduct(product: JuiceProduct) {
+  const format1L = product.formats.find((f) => f.volume === "1L");
+  const format250 = product.formats.find((f) => f.volume === "250ml");
+  editForm.name = product.name;
+  editForm.description = product.description ?? "";
+  editForm.format1LEnabled = format1L?.enabled ?? false;
+  editForm.price1L = format1L?.price ?? 0;
+  editForm.minQuantity1L = format1L?.minQuantity ?? 0;
+  editForm.format250Enabled = format250?.enabled ?? false;
+  editForm.price250 = format250?.price ?? 0;
+  editForm.minQuantity250 = format250?.minQuantity ?? 0;
+  editError.value = "";
+  editSuccess.value = "";
+  showProductForm.value = false;
+  showProductionForm.value = false;
+  editingProductId.value = product.id;
+}
+
+function cancelEditProduct() {
+  editingProductId.value = null;
+  editError.value = "";
+  editSuccess.value = "";
+}
+
+async function submitEditProduct() {
+  editError.value = "";
+  editSuccess.value = "";
+
+  if (!editingProductId.value) return;
+  if (!editForm.name.trim()) {
+    editError.value = "Le nom du produit est obligatoire.";
+    return;
+  }
+  if (!editForm.format1LEnabled && !editForm.format250Enabled) {
+    editError.value = "Active au moins un format.";
+    return;
+  }
+  if (editForm.format1LEnabled && editForm.price1L < 0) {
+    editError.value = "Le prix 1 L est invalide.";
+    return;
+  }
+  if (editForm.format250Enabled && editForm.price250 < 0) {
+    editError.value = "Le prix 250 ml est invalide.";
+    return;
+  }
+
+  editSubmitting.value = true;
+  try {
+    await apiFetch(useApiUrl(`/stock/products/${editingProductId.value}`), {
+      method: "PATCH",
+      body: {
+        name: editForm.name.trim(),
+        description: editForm.description.trim(),
+        format1LEnabled: editForm.format1LEnabled,
+        price1L: editForm.format1LEnabled ? editForm.price1L : 0,
+        minQuantity1L: editForm.minQuantity1L,
+        format250Enabled: editForm.format250Enabled,
+        price250: editForm.format250Enabled ? editForm.price250 : 0,
+        minQuantity250: editForm.minQuantity250,
+      },
+    });
+    editSuccess.value = "Produit modifie avec succes.";
+    await refresh();
+    editingProductId.value = null;
+  } catch {
+    editError.value = "Impossible de modifier ce produit.";
+  } finally {
+    editSubmitting.value = false;
+  }
 }
 
 function uploadUrl(path: string) {
@@ -202,6 +312,90 @@ async function removeProduct(id: string, name: string) {
         <ProductFormLazy @success="onProductSuccess" />
       </section>
 
+      <section v-if="editingProductId" class="panel collapsible-panel">
+        <h2 class="panel__title">Modifier un produit</h2>
+        <form class="form-grid" @submit.prevent="submitEditProduct">
+          <div class="form-field form-field--wide">
+            <label for="edit-product-name">Nom du produit</label>
+            <input id="edit-product-name" v-model="editForm.name" type="text" required />
+          </div>
+          <div class="form-field form-field--wide">
+            <label for="edit-product-description">Description</label>
+            <input
+              id="edit-product-description"
+              v-model="editForm.description"
+              type="text"
+              placeholder="Description (optionnel)"
+            />
+          </div>
+
+          <div class="form-field">
+            <label>
+              <input v-model="editForm.format1LEnabled" type="checkbox" />
+              Format 1L actif
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="edit-price-1l">Prix 1L (FCFA)</label>
+            <input
+              id="edit-price-1l"
+              v-model.number="editForm.price1L"
+              type="number"
+              min="0"
+              :disabled="!editForm.format1LEnabled"
+            />
+          </div>
+          <div class="form-field">
+            <label for="edit-min-1l">Seuil 1L</label>
+            <input
+              id="edit-min-1l"
+              v-model.number="editForm.minQuantity1L"
+              type="number"
+              min="0"
+              :disabled="!editForm.format1LEnabled"
+            />
+          </div>
+
+          <div class="form-field">
+            <label>
+              <input v-model="editForm.format250Enabled" type="checkbox" />
+              Format 250ml actif
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="edit-price-250">Prix 250ml (FCFA)</label>
+            <input
+              id="edit-price-250"
+              v-model.number="editForm.price250"
+              type="number"
+              min="0"
+              :disabled="!editForm.format250Enabled"
+            />
+          </div>
+          <div class="form-field">
+            <label for="edit-min-250">Seuil 250ml</label>
+            <input
+              id="edit-min-250"
+              v-model.number="editForm.minQuantity250"
+              type="number"
+              min="0"
+              :disabled="!editForm.format250Enabled"
+            />
+          </div>
+
+          <div class="form-field form-actions">
+            <button type="submit" class="btn btn--primary" :disabled="editSubmitting">
+              {{ editSubmitting ? "Mise a jour..." : "Enregistrer les modifications" }}
+            </button>
+            <button type="button" class="btn btn--ghost" :disabled="editSubmitting" @click="cancelEditProduct">
+              Annuler
+            </button>
+          </div>
+        </form>
+        <p v-if="editError" class="form-error">{{ editError }}</p>
+        <p v-if="editSuccess" class="form-success">{{ editSuccess }}</p>
+      </section>
+
       <section v-if="showProductionForm" class="panel collapsible-panel">
         <h2 class="panel__title">Enregistrer une production</h2>
         <form class="form-grid" @submit.prevent="submitProduction">
@@ -283,14 +477,48 @@ async function removeProduct(id: string, name: string) {
       </section>
 
       <section v-if="data?.products.length" class="panel" style="margin-bottom: 1.25rem">
-        <h2 class="panel__title">Catalogue produits</h2>
+        <div class="panel__header-row">
+          <h2 class="panel__title">Catalogue produits</h2>
+          <div class="stock-actions" style="margin-bottom: 0">
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              @click="collapseAllProducts"
+            >
+              Tout reduire
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              @click="expandAllProducts"
+            >
+              Tout etendre
+            </button>
+          </div>
+        </div>
         <div class="product-cards">
           <article
             v-for="p in data.products"
             :key="p.id"
             class="product-card"
+            :class="{ 'product-card--collapsed': isProductCollapsed(p.id) }"
           >
+            <div class="product-card__summary">
+              <strong class="product-card__summary-name">{{ p.name }}</strong>
+              <span class="product-card__summary-stock">
+                {{ productTotalStock(p) }} unite{{ productTotalStock(p) > 1 ? "s" : "" }}
+              </span>
+              <button
+                type="button"
+                class="btn btn--ghost btn--sm"
+                @click="toggleProductCollapsed(p.id)"
+              >
+                {{ isProductCollapsed(p.id) ? "Etendre" : "Reduire" }}
+              </button>
+            </div>
+
             <div
+              v-if="!isProductCollapsed(p.id)"
               class="product-card__media"
               :class="{ 'product-card__media--empty': !p.photoUrls.length }"
             >
@@ -305,9 +533,9 @@ async function removeProduct(id: string, name: string) {
               <span v-else>Sans photo</span>
             </div>
             <div class="product-card__body">
-              <h3 class="product-card__name">{{ p.name }}</h3>
+              <h3 v-if="!isProductCollapsed(p.id)" class="product-card__name">{{ p.name }}</h3>
               <p v-if="p.description" class="product-card__desc">{{ p.description }}</p>
-              <div class="format-prices">
+              <div v-if="!isProductCollapsed(p.id)" class="format-prices">
                 <div
                   v-for="f in p.formats.filter((x) => x.enabled)"
                   :key="f.volume"
@@ -325,7 +553,14 @@ async function removeProduct(id: string, name: string) {
                 </div>
               </div>
             </div>
-            <div class="product-card__actions">
+            <div v-if="!isProductCollapsed(p.id)" class="product-card__actions">
+              <button
+                type="button"
+                class="btn btn--ghost"
+                @click="startEditProduct(p)"
+              >
+                Modifier
+              </button>
               <button
                 type="button"
                 class="btn btn--ghost"
@@ -386,6 +621,13 @@ async function removeProduct(id: string, name: string) {
                     {{ f.quantity }}
                   </td>
                   <td v-if="idx === 0" :rowspan="p.formats.filter((x) => x.enabled).length">
+                    <button
+                      type="button"
+                      class="btn btn--ghost"
+                      @click="startEditProduct(p)"
+                    >
+                      Modifier
+                    </button>
                     <button
                       type="button"
                       class="btn btn--ghost"
