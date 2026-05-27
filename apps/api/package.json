@@ -6,7 +6,7 @@
     "predev": "npm run build -w @yowell/shared",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "start:dev": "npm run dev",
-    "build": "nest build",
+    "build": "npm run prisma:generate && nest build",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",
