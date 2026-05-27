@@ -28,6 +28,7 @@ const productionSuccess = ref("");
 const showProductForm = ref(false);
 const showProductionForm = ref(false);
 const isCatalogueCollapsed = ref(false);
+const isInventoryCollapsed = ref(false);
 const editingProductId = ref<string | null>(null);
 const editSubmitting = ref(false);
 const editError = ref("");
@@ -663,8 +664,26 @@ async function removeProduct(id: string, name: string) {
       </section>
 
       <section class="panel">
-        <h2 class="panel__title">Inventaire (tableau)</h2>
-        <div v-if="data?.products.length" class="table-wrap">
+        <div class="panel__header-row">
+          <h2 class="panel__title">Inventaire (tableau)</h2>
+          <div class="stock-actions" style="margin-bottom: 0">
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              @click="isInventoryCollapsed = true"
+            >
+              Reduire
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              @click="isInventoryCollapsed = false"
+            >
+              Etendre
+            </button>
+          </div>
+        </div>
+        <div v-if="data?.products.length && !isInventoryCollapsed" class="table-wrap">
           <table class="table">
             <thead>
               <tr>
