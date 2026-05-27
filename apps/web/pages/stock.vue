@@ -27,11 +27,15 @@ const productionSuccess = ref("");
 
 const showProductForm = ref(false);
 const showProductionForm = ref(false);
-const collapsedProductIds = ref<string[]>([]);
+const isCatalogueCollapsed = ref(false);
 const editingProductId = ref<string | null>(null);
 const editSubmitting = ref(false);
 const editError = ref("");
 const editSuccess = ref("");
+const editPhotoInput = ref<HTMLInputElement | null>(null);
+const editPhotoFiles = ref<File[]>([]);
+const editPhotoPreviews = ref<string[]>([]);
+const editExistingPhotoUrls = ref<string[]>([]);
 const editForm = reactive({
   name: "",
   description: "",
@@ -66,26 +70,12 @@ function onProductSuccess() {
   showProductForm.value = false;
 }
 
-function isProductCollapsed(productId: string) {
-  return collapsedProductIds.value.includes(productId);
-}
-
-function toggleProductCollapsed(productId: string) {
-  if (isProductCollapsed(productId)) {
-    collapsedProductIds.value = collapsedProductIds.value.filter(
-      (id) => id !== productId,
-    );
-    return;
-  }
-  collapsedProductIds.value = [...collapsedProductIds.value, productId];
-}
-
 function collapseAllProducts() {
-  collapsedProductIds.value = (data.value?.products ?? []).map((p) => p.id);
+  isCatalogueCollapsed.value = true;
 }
 
 function expandAllProducts() {
-  collapsedProductIds.value = [];
+  isCatalogueCollapsed.value = false;
 }
 
 function startEditProduct(product: JuiceProduct) {
@@ -99,6 +89,13 @@ function startEditProduct(product: JuiceProduct) {
   editForm.format250Enabled = format250?.enabled ?? false;
   editForm.price250 = format250?.price ?? 0;
   editForm.minQuantity250 = format250?.minQuantity ?? 0;
+  editPhotoFiles.value = [];
+  for (const url of editPhotoPreviews.value) {
+    URL.revokeObjectURL(url);
+  }
+  editPhotoPreviews.value = [];
+  editExistingPhotoUrls.value = [...product.photoUrls];
+  if (editPhotoInput.value) editPhotoInput.value.value = "";
   editError.value = "";
   editSuccess.value = "";
   showProductForm.value = false;
@@ -110,6 +107,40 @@ function cancelEditProduct() {
   editingProductId.value = null;
   editError.value = "";
   editSuccess.value = "";
+  editPhotoFiles.value = [];
+  editExistingPhotoUrls.value = [];
+  for (const url of editPhotoPreviews.value) {
+    URL.revokeObjectURL(url);
+  }
+  editPhotoPreviews.value = [];
+  if (editPhotoInput.value) editPhotoInput.value.value = "";
+}
+
+function onEditPhotosChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  editPhotoFiles.value = files;
+
+  for (const url of editPhotoPreviews.value) {
+    URL.revokeObjectURL(url);
+  }
+  editPhotoPreviews.value = files.map((f) => URL.createObjectURL(f));
+}
+
+function removeEditPhoto(index: number) {
+  const files = [...editPhotoFiles.value];
+  files.splice(index, 1);
+  editPhotoFiles.value = files;
+
+  const preview = editPhotoPreviews.value[index];
+  if (preview) URL.revokeObjectURL(preview);
+  editPhotoPreviews.value.splice(index, 1);
+
+  if (editPhotoInput.value) {
+    const dt = new DataTransfer();
+    for (const f of files) dt.items.add(f);
+    editPhotoInput.value.files = dt.files;
+  }
 }
 
 async function submitEditProduct() {
@@ -136,22 +167,33 @@ async function submitEditProduct() {
 
   editSubmitting.value = true;
   try {
+    const formData = new FormData();
+    formData.append("name", editForm.name.trim());
+    formData.append("description", editForm.description.trim());
+    formData.append("format1LEnabled", String(editForm.format1LEnabled));
+    formData.append("price1L", String(editForm.format1LEnabled ? editForm.price1L : 0));
+    formData.append("minQuantity1L", String(editForm.minQuantity1L));
+    formData.append("format250Enabled", String(editForm.format250Enabled));
+    formData.append("price250", String(editForm.format250Enabled ? editForm.price250 : 0));
+    formData.append("minQuantity250", String(editForm.minQuantity250));
+    for (const file of editPhotoFiles.value) {
+      formData.append("photos", file);
+    }
+
     await apiFetch(useApiUrl(`/stock/products/${editingProductId.value}`), {
       method: "PATCH",
-      body: {
-        name: editForm.name.trim(),
-        description: editForm.description.trim(),
-        format1LEnabled: editForm.format1LEnabled,
-        price1L: editForm.format1LEnabled ? editForm.price1L : 0,
-        minQuantity1L: editForm.minQuantity1L,
-        format250Enabled: editForm.format250Enabled,
-        price250: editForm.format250Enabled ? editForm.price250 : 0,
-        minQuantity250: editForm.minQuantity250,
-      },
+      body: formData,
     });
     editSuccess.value = "Produit modifie avec succes.";
     await refresh();
     editingProductId.value = null;
+    editPhotoFiles.value = [];
+    editExistingPhotoUrls.value = [];
+    for (const url of editPhotoPreviews.value) {
+      URL.revokeObjectURL(url);
+    }
+    editPhotoPreviews.value = [];
+    if (editPhotoInput.value) editPhotoInput.value.value = "";
   } catch {
     editError.value = "Impossible de modifier ce produit.";
   } finally {
@@ -191,6 +233,12 @@ watch(
     }
   },
 );
+
+onUnmounted(() => {
+  for (const url of editPhotoPreviews.value) {
+    URL.revokeObjectURL(url);
+  }
+});
 
 function syncProductionVolume(product: JuiceProduct) {
   const formats = product.formats.filter((f) => f.enabled);
@@ -383,6 +431,56 @@ async function removeProduct(id: string, name: string) {
             />
           </div>
 
+          <div class="form-field form-field--wide">
+            <label for="edit-photos">Photos du produit</label>
+            <input
+              id="edit-photos"
+              ref="editPhotoInput"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
+              @change="onEditPhotosChange"
+            />
+            <small>
+              Ajoute des photos pour remplacer les photos actuelles (max 6 images, 5 Mo chacune).
+            </small>
+          </div>
+
+          <div class="form-field form-field--wide">
+            <p style="margin: 0 0 0.4rem; font-weight: 600">Photos actuelles</p>
+            <div v-if="editExistingPhotoUrls.length" class="photo-preview-grid">
+              <figure
+                v-for="(url, index) in editExistingPhotoUrls"
+                :key="`existing-${url}`"
+                class="photo-preview"
+              >
+                <img :src="uploadUrl(url)" :alt="`Photo actuelle ${index + 1}`" />
+              </figure>
+            </div>
+            <p v-else class="photo-preview-empty">Aucune photo</p>
+          </div>
+
+          <div v-if="editPhotoPreviews.length" class="form-field form-field--wide">
+            <p style="margin: 0 0 0.4rem; font-weight: 600">Nouvelles photos</p>
+            <div class="photo-preview-grid">
+              <figure
+                v-for="(src, index) in editPhotoPreviews"
+                :key="src"
+                class="photo-preview"
+              >
+                <img :src="src" :alt="`Nouvelle photo ${index + 1}`" />
+                <button
+                  type="button"
+                  class="photo-preview__remove"
+                  aria-label="Retirer la photo"
+                  @click="removeEditPhoto(index)"
+                >
+                  ×
+                </button>
+              </figure>
+            </div>
+          </div>
+
           <div class="form-field form-actions">
             <button type="submit" class="btn btn--primary" :disabled="editSubmitting">
               {{ editSubmitting ? "Mise a jour..." : "Enregistrer les modifications" }}
@@ -485,40 +583,31 @@ async function removeProduct(id: string, name: string) {
               class="btn btn--ghost btn--sm"
               @click="collapseAllProducts"
             >
-              Tout reduire
+              Reduire
             </button>
             <button
               type="button"
               class="btn btn--ghost btn--sm"
               @click="expandAllProducts"
             >
-              Tout etendre
+              Etendre
             </button>
           </div>
         </div>
-        <div class="product-cards">
+        <div v-if="!isCatalogueCollapsed" class="product-cards">
           <article
             v-for="p in data.products"
             :key="p.id"
             class="product-card"
-            :class="{ 'product-card--collapsed': isProductCollapsed(p.id) }"
           >
             <div class="product-card__summary">
               <strong class="product-card__summary-name">{{ p.name }}</strong>
               <span class="product-card__summary-stock">
                 {{ productTotalStock(p) }} unite{{ productTotalStock(p) > 1 ? "s" : "" }}
               </span>
-              <button
-                type="button"
-                class="btn btn--ghost btn--sm"
-                @click="toggleProductCollapsed(p.id)"
-              >
-                {{ isProductCollapsed(p.id) ? "Etendre" : "Reduire" }}
-              </button>
             </div>
 
             <div
-              v-if="!isProductCollapsed(p.id)"
               class="product-card__media"
               :class="{ 'product-card__media--empty': !p.photoUrls.length }"
             >
@@ -533,9 +622,9 @@ async function removeProduct(id: string, name: string) {
               <span v-else>Sans photo</span>
             </div>
             <div class="product-card__body">
-              <h3 v-if="!isProductCollapsed(p.id)" class="product-card__name">{{ p.name }}</h3>
+              <h3 class="product-card__name">{{ p.name }}</h3>
               <p v-if="p.description" class="product-card__desc">{{ p.description }}</p>
-              <div v-if="!isProductCollapsed(p.id)" class="format-prices">
+              <div class="format-prices">
                 <div
                   v-for="f in p.formats.filter((x) => x.enabled)"
                   :key="f.volume"
@@ -553,7 +642,7 @@ async function removeProduct(id: string, name: string) {
                 </div>
               </div>
             </div>
-            <div v-if="!isProductCollapsed(p.id)" class="product-card__actions">
+            <div class="product-card__actions">
               <button
                 type="button"
                 class="btn btn--ghost"

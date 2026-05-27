@@ -161,6 +161,7 @@ export class StockService {
   async updateProduct(
     id: string,
     input: CreateJuiceProductInput,
+    photoUrls: string[] = [],
   ): Promise<JuiceProduct> {
     const existing = await this.prisma.product.findUnique({
       where: { id },
@@ -224,6 +225,17 @@ export class StockService {
         }
       }
 
+      if (photoUrls.length > 0) {
+        await tx.productPhoto.deleteMany({ where: { productId: id } });
+        await tx.productPhoto.createMany({
+          data: photoUrls.map((url, index) => ({
+            productId: id,
+            url,
+            position: index,
+          })),
+        });
+      }
+
       return tx.product.findUnique({
         where: { id },
         include: { formats: true, photos: true },
@@ -232,6 +244,10 @@ export class StockService {
 
     if (!updated) {
       throw new NotFoundException("Produit introuvable");
+    }
+
+    if (photoUrls.length > 0) {
+      deletePhotoFiles(existing.photos.map((photo) => photo.url));
     }
 
     return mapProduct(updated);

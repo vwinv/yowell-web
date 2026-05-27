@@ -49,12 +49,21 @@ export class StockController {
   }
 
   @Patch("products/:id")
+  @UseInterceptors(
+    FilesInterceptor("photos", 6, {
+      storage: productPhotosStorage,
+      fileFilter: photoFilter,
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
   updateProduct(
     @Param("id") id: string,
     @Body() dto: UpdateProductDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
+    const photoUrls = (files ?? []).map((f) => toPublicPhotoPath(f.filename));
     const input = this.stockService.productFromDto(dto);
-    return this.stockService.updateProduct(id, input);
+    return this.stockService.updateProduct(id, input, photoUrls);
   }
 
   @Delete("products/:id")
