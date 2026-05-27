@@ -36,6 +36,9 @@ function humanSummary(method: string, path: string): string {
   if (method === "PATCH" && base.includes("/deliveries/") && base.endsWith("/remaining")) {
     return "Mise à jour des restants d'une course";
   }
+  if (method === "PATCH" && base.startsWith("/api/deliveries/")) {
+    return "Modification d'une course";
+  }
   if (method === "DELETE" && base.startsWith("/api/deliveries/")) {
     return "Suppression d'une course";
   }
