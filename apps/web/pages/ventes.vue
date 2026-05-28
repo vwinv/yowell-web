@@ -24,9 +24,18 @@ const { data: products } = await useApiFetch<JuiceProduct[]>(
 );
 
 const showSaleForm = ref(false);
+const editingSaleId = ref<string | null>(null);
 const SaleFormLazy = defineAsyncComponent(
   () => import("~/components/SaleForm.vue"),
 );
+const SaleEditFormLazy = defineAsyncComponent(
+  () => import("~/components/SaleEditForm.vue"),
+);
+
+const editingSale = computed<Sale | null>(() => {
+  if (!editingSaleId.value) return null;
+  return data.value?.sales.find((s) => s.id === editingSaleId.value) ?? null;
+});
 
 const clientOptions = computed(
   () => clientsData.value?.clients.map((c) => ({ id: c.id, name: c.name })) ?? [],
@@ -38,6 +47,24 @@ async function onSaleSuccess() {
     refreshNuxtData("clients-overview"),
   ]);
   showSaleForm.value = false;
+}
+
+function startEditSale(sale: Sale) {
+  editingSaleId.value = sale.id;
+  showSaleForm.value = false;
+}
+
+function cancelEditSale() {
+  editingSaleId.value = null;
+}
+
+async function onSaleEditSuccess() {
+  await Promise.all([
+    refresh(),
+    refreshNuxtData("clients-overview"),
+    refreshNuxtData("accounting-overview"),
+  ]);
+  editingSaleId.value = null;
 }
 
 const updatingPaymentId = ref<string | null>(null);
@@ -101,7 +128,7 @@ async function markAsPaid(sale: Sale) {
         <button
           type="button"
           class="btn btn--primary"
-          @click="showSaleForm = !showSaleForm"
+          @click="showSaleForm = !showSaleForm; editingSaleId = null"
         >
           {{ showSaleForm ? "Masquer le formulaire" : "+ Enregistrer une vente" }}
         </button>
@@ -109,6 +136,17 @@ async function markAsPaid(sale: Sale) {
           Gérer les clients →
         </NuxtLink>
       </div>
+
+      <section v-if="editingSale" class="panel collapsible-panel">
+        <h2 class="panel__title">Modifier la vente</h2>
+        <SaleEditFormLazy
+          :sale="editingSale"
+          :clients="clientOptions"
+          :products="products ?? []"
+          @success="onSaleEditSuccess"
+          @cancel="cancelEditSale"
+        />
+      </section>
 
       <section v-if="showSaleForm" class="panel collapsible-panel">
         <h2 class="panel__title">Nouvelle vente</h2>
@@ -185,6 +223,14 @@ async function markAsPaid(sale: Sale) {
                 </td>
                 <td>{{ sale.notes || "—" }}</td>
                 <td class="table-actions">
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    style="margin-right: 0.35rem"
+                    @click="startEditSale(sale)"
+                  >
+                    Modifier
+                  </button>
                   <button
                     type="button"
                     class="btn btn--ghost btn--sm"

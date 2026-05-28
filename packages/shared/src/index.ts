@@ -432,6 +432,16 @@ export type UpdateSalePaymentInput = {
   paymentStatus: SalePaymentStatus;
 };
 
+export type UpdateSaleInput = {
+  clientId: string;
+  orderedAt?: string;
+  items: CreateSaleLineInput[];
+  /** Montant final facturé (peut différer du total des lignes : remise, supplément, etc.) */
+  totalAmount: number;
+  notes?: string;
+  paymentStatus?: SalePaymentStatus;
+};
+
 export function saleTotal(items: SaleLineItem[]): number {
   return items.reduce((sum, item) => sum + item.lineTotal, 0);
 }

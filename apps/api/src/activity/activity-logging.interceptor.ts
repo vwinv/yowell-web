@@ -26,6 +26,9 @@ function humanSummary(method: string, path: string): string {
   if (method === "PATCH" && base.includes("/sales/") && base.includes("/payment-status")) {
     return "Mise à jour du paiement d'une vente";
   }
+  if (method === "PATCH" && base.startsWith("/api/sales/")) {
+    return "Modification d'une vente";
+  }
   if (method === "GET" && base.includes("/sales/") && base.includes("/invoice")) {
     return "Téléchargement d'une facture";
   }
