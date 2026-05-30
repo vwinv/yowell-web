@@ -387,6 +387,9 @@ export const SALE_PERSONALIZATION_FEE = 100;
 
 export type SalePaymentStatus = "paid" | "unpaid";
 
+/** Vente confirmée ou devis (sans impact stock) */
+export type SaleKind = "sale" | "quote";
+
 export type SaleLineItem = {
   productId: string;
   productName: string;
@@ -408,6 +411,7 @@ export type Sale = {
   /** Remise appliquée sur le total (FCFA) */
   discountAmount: number;
   paymentStatus: SalePaymentStatus;
+  kind: SaleKind;
   notes: string;
   createdAt: string;
 };
@@ -433,6 +437,7 @@ export type CreateSaleInput = {
   personalization?: boolean;
   discountAmount?: number;
   paymentStatus?: SalePaymentStatus;
+  kind?: SaleKind;
   notes?: string;
 };
 

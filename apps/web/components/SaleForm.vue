@@ -20,7 +20,11 @@ type OrderLine = {
 const props = defineProps<{
   clients: { id: string; name: string }[];
   products: JuiceProduct[];
+  /** "quote" = devis sans vérification de stock */
+  mode?: "sale" | "quote";
 }>();
+
+const isQuote = computed(() => props.mode === "quote");
 
 const clientId = ref("");
 const orderedAt = ref(new Date().toISOString().slice(0, 10));
@@ -150,7 +154,9 @@ async function submit() {
     return;
   }
   if (!props.products.length) {
-    error.value = "Aucun produit en stock — crée d'abord un produit.";
+    error.value = isQuote.value
+      ? "Aucun produit au catalogue — crée d'abord un produit dans Stock (quantité 0 possible)."
+      : "Aucun produit en stock — crée d'abord un produit.";
     return;
   }
 
@@ -162,11 +168,13 @@ async function submit() {
     return;
   }
 
-  for (const line of validLines) {
-    if (line.quantity > lineStock(line)) {
-      const p = productById(line.productId);
-      error.value = `Stock insuffisant pour ${p?.name} (${line.volume}) : ${lineStock(line)} disponible(s).`;
-      return;
+  if (!isQuote.value) {
+    for (const line of validLines) {
+      if (line.quantity > lineStock(line)) {
+        const p = productById(line.productId);
+        error.value = `Stock insuffisant pour ${p?.name} (${line.volume}) : ${lineStock(line)} disponible(s).`;
+        return;
+      }
     }
   }
 
@@ -185,9 +193,12 @@ async function submit() {
         personalization: personalization.value,
         discountAmount: discountAmount.value === "" ? 0 : Number(discountAmount.value),
         notes: notes.value.trim(),
+        ...(isQuote.value ? { kind: "quote" as const } : {}),
       },
     });
-    success.value = "Vente enregistrée — stock mis à jour.";
+    success.value = isQuote.value
+      ? "Devis enregistré — tu peux télécharger le PDF."
+      : "Vente enregistrée — stock mis à jour.";
     resetForm();
     emit("success");
   } catch {
@@ -243,7 +254,11 @@ async function submit() {
                 :key="f.volume"
                 :value="f.volume"
               >
-                {{ f.volume }} — {{ formatCfa(f.price) }} (stock: {{ f.quantity }})
+                {{
+                  isQuote
+                    ? `${f.volume} — ${formatCfa(f.price)}`
+                    : `${f.volume} — ${formatCfa(f.price)} (stock: ${f.quantity})`
+                }}
               </option>
             </select>
           </div>
@@ -323,7 +338,7 @@ async function submit() {
         class="btn btn--primary"
         :disabled="submitting || !clients.length || !products.length"
       >
-        {{ submitting ? "Enregistrement…" : "Enregistrer la vente" }}
+        {{ submitting ? "Enregistrement…" : isQuote ? "Enregistrer le devis" : "Enregistrer la vente" }}
       </button>
     </div>
 

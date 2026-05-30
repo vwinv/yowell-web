@@ -21,7 +21,10 @@ function humanSummary(method: string, path: string): string {
   const base = path.split("?")[0] ?? path;
 
   if (method === "POST" && base === "/api/sales") {
-    return "Enregistrement d'une vente";
+    return "Enregistrement d'une vente ou d'un devis";
+  }
+  if (method === "POST" && base.includes("/sales/") && base.endsWith("/convert-to-sale")) {
+    return "Conversion d'un devis en vente";
   }
   if (method === "PATCH" && base.includes("/sales/") && base.includes("/payment-status")) {
     return "Mise à jour du paiement d'une vente";
@@ -30,7 +33,7 @@ function humanSummary(method: string, path: string): string {
     return "Modification d'une vente";
   }
   if (method === "GET" && base.includes("/sales/") && base.includes("/invoice")) {
-    return "Téléchargement d'une facture";
+    return "Téléchargement d'une facture ou d'un devis";
   }
 
   if (method === "POST" && base === "/api/deliveries") {

@@ -24,6 +24,7 @@ const { data: products } = await useApiFetch<JuiceProduct[]>(
 );
 
 const showSaleForm = ref(false);
+const showQuoteForm = ref(false);
 const editingSaleId = ref<string | null>(null);
 const SaleFormLazy = defineAsyncComponent(
   () => import("~/components/SaleForm.vue"),
@@ -49,9 +50,31 @@ async function onSaleSuccess() {
   showSaleForm.value = false;
 }
 
+async function onQuoteSuccess() {
+  await refresh();
+  showQuoteForm.value = false;
+}
+
+function toggleSaleForm() {
+  showSaleForm.value = !showSaleForm.value;
+  if (showSaleForm.value) {
+    showQuoteForm.value = false;
+    editingSaleId.value = null;
+  }
+}
+
+function toggleQuoteForm() {
+  showQuoteForm.value = !showQuoteForm.value;
+  if (showQuoteForm.value) {
+    showSaleForm.value = false;
+    editingSaleId.value = null;
+  }
+}
+
 function startEditSale(sale: Sale) {
   editingSaleId.value = sale.id;
   showSaleForm.value = false;
+  showQuoteForm.value = false;
 }
 
 function cancelEditSale() {
@@ -67,8 +90,30 @@ async function onSaleEditSuccess() {
   editingSaleId.value = null;
 }
 
+const convertingId = ref<string | null>(null);
 const updatingPaymentId = ref<string | null>(null);
 const { generatingId: generatingInvoiceId, downloadInvoice } = useSaleInvoice();
+
+async function convertToSale(sale: Sale) {
+  if (sale.kind !== "quote") return;
+  convertingId.value = sale.id;
+  try {
+    await apiFetch(useApiUrl(`/sales/${sale.id}/convert-to-sale`), {
+      method: "POST",
+      autoReload: false,
+    });
+    await Promise.all([
+      refresh(),
+      refreshNuxtData("stock-products"),
+    ]);
+  } catch {
+    alert(
+      "Impossible de convertir le devis — vérifie que le stock est suffisant.",
+    );
+  } finally {
+    convertingId.value = null;
+  }
+}
 
 function paymentLabel(status: SalePaymentStatus) {
   return status === "paid" ? "Payé" : "Non payé";
@@ -97,7 +142,7 @@ async function markAsPaid(sale: Sale) {
   <div>
     <PageHeader
       title="Ventes"
-      description="Enregistre les commandes — marque « Payé » pour comptabiliser l'encaissement."
+      description="Enregistre les ventes ou crée un devis sans stock — marque « Payé » pour comptabiliser l'encaissement."
     />
 
     <p v-if="pending" class="loading">Chargement des ventes</p>
@@ -128,17 +173,29 @@ async function markAsPaid(sale: Sale) {
         <button
           type="button"
           class="btn btn--primary"
-          @click="showSaleForm = !showSaleForm; editingSaleId = null"
+          @click="toggleSaleForm()"
         >
           {{ showSaleForm ? "Masquer le formulaire" : "+ Enregistrer une vente" }}
+        </button>
+        <button
+          type="button"
+          class="btn btn--secondary"
+          @click="toggleQuoteForm()"
+        >
+          {{ showQuoteForm ? "Masquer le devis" : "+ Créer un devis" }}
         </button>
         <NuxtLink to="/clients" class="btn btn--secondary">
           Gérer les clients →
         </NuxtLink>
+        <NuxtLink to="/stock" class="btn btn--secondary">
+          Catalogue produits →
+        </NuxtLink>
       </div>
 
       <section v-if="editingSale" class="panel collapsible-panel">
-        <h2 class="panel__title">Modifier la vente</h2>
+        <h2 class="panel__title">
+          {{ editingSale.kind === "quote" ? "Modifier le devis" : "Modifier la vente" }}
+        </h2>
         <SaleEditFormLazy
           :sale="editingSale"
           :clients="clientOptions"
@@ -167,8 +224,40 @@ async function markAsPaid(sale: Sale) {
         />
       </section>
 
+      <section v-if="showQuoteForm" class="panel collapsible-panel">
+        <h2 class="panel__title">Nouveau devis</h2>
+        <p class="panel__hint" style="margin-bottom: 1rem">
+          Le devis n'impacte pas le stock — idéal avant d'avoir de la production.
+        </p>
+        <p
+          v-if="!clientOptions.length"
+          class="form-error"
+          style="margin-bottom: 1rem"
+        >
+          Aucun client —
+          <NuxtLink to="/clients">crée un client</NuxtLink>
+          avant de faire un devis.
+        </p>
+        <p
+          v-else-if="!(products ?? []).length"
+          class="form-error"
+          style="margin-bottom: 1rem"
+        >
+          Aucun produit au catalogue —
+          <NuxtLink to="/stock">crée un produit</NuxtLink>
+          (quantité 0 possible) pour établir un devis.
+        </p>
+        <SaleFormLazy
+          v-else
+          mode="quote"
+          :clients="clientOptions"
+          :products="products ?? []"
+          @success="onQuoteSuccess"
+        />
+      </section>
+
       <section class="panel">
-        <h2 class="panel__title">Historique des ventes</h2>
+        <h2 class="panel__title">Historique</h2>
         <div v-if="data?.recentSales.length" class="table-wrap">
           <table class="table">
             <thead>
@@ -208,25 +297,46 @@ async function markAsPaid(sale: Sale) {
                     </span>
                   </span>
                   <span
-                    class="badge"
-                    :class="{
-                      'badge--paid': sale.paymentStatus === 'paid',
-                      'badge--unpaid': sale.paymentStatus === 'unpaid',
-                    }"
+                    v-if="sale.kind === 'quote'"
+                    class="badge badge--quote"
                   >
-                    {{ paymentLabel(sale.paymentStatus) }}
+                    Devis
                   </span>
+                  <template v-else>
+                    <span
+                      class="badge"
+                      :class="{
+                        'badge--paid': sale.paymentStatus === 'paid',
+                        'badge--unpaid': sale.paymentStatus === 'unpaid',
+                      }"
+                    >
+                      {{ paymentLabel(sale.paymentStatus) }}
+                    </span>
+                    <button
+                      v-if="sale.paymentStatus === 'unpaid'"
+                      type="button"
+                      class="btn btn--primary btn--sm payment-cell__action"
+                      :disabled="updatingPaymentId === sale.id"
+                      @click="markAsPaid(sale)"
+                    >
+                      {{
+                        updatingPaymentId === sale.id
+                          ? "…"
+                          : "Marquer payé"
+                      }}
+                    </button>
+                  </template>
                   <button
-                    v-if="sale.paymentStatus === 'unpaid'"
+                    v-if="sale.kind === 'quote'"
                     type="button"
                     class="btn btn--primary btn--sm payment-cell__action"
-                    :disabled="updatingPaymentId === sale.id"
-                    @click="markAsPaid(sale)"
+                    :disabled="convertingId === sale.id"
+                    @click="convertToSale(sale)"
                   >
                     {{
-                      updatingPaymentId === sale.id
+                      convertingId === sale.id
                         ? "…"
-                        : "Marquer payé"
+                        : "Convertir en vente"
                     }}
                   </button>
                 </td>
@@ -249,7 +359,9 @@ async function markAsPaid(sale: Sale) {
                     {{
                       generatingInvoiceId === sale.id
                         ? "PDF…"
-                        : "Facture"
+                        : sale.kind === "quote"
+                          ? "Devis"
+                          : "Facture"
                     }}
                   </button>
                 </td>

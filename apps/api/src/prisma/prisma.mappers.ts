@@ -3,6 +3,7 @@ import {
   JuiceVolume as PrismaJuiceVolume,
   type Prisma,
   SalePaymentStatus as PrismaSalePaymentStatus,
+  SaleKind as PrismaSaleKind,
   UserRole as PrismaUserRole,
 } from "@prisma/client";
 import type {
@@ -18,6 +19,7 @@ import type {
   ManualAccountingEntry,
   ProductionRecord,
   Sale,
+  SaleKind,
   SaleLineItem,
   SalePaymentStatus,
   UserRole,
@@ -72,6 +74,14 @@ export function toSharedSalePaymentStatus(
   status: PrismaSalePaymentStatus,
 ): SalePaymentStatus {
   return status === PrismaSalePaymentStatus.PAID ? "paid" : "unpaid";
+}
+
+export function toPrismaSaleKind(kind: SaleKind): PrismaSaleKind {
+  return kind === "quote" ? PrismaSaleKind.QUOTE : PrismaSaleKind.SALE;
+}
+
+export function toSharedSaleKind(kind: PrismaSaleKind): SaleKind {
+  return kind === PrismaSaleKind.QUOTE ? "quote" : "sale";
 }
 
 export function toPrismaAccountingEntryType(
@@ -212,6 +222,7 @@ export function mapSale(sale: PrismaSaleRecord): Sale {
     personalization: sale.personalization,
     discountAmount: sale.discountAmount,
     paymentStatus: toSharedSalePaymentStatus(sale.paymentStatus),
+    kind: toSharedSaleKind(sale.kind),
     notes: sale.notes,
     createdAt: dateToIso(sale.createdAt),
   };

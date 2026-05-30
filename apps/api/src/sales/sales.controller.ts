@@ -41,13 +41,20 @@ export class SalesController {
     return this.salesService.update(id, dto);
   }
 
+  @Post(":id/convert-to-sale")
+  convertToSale(@Param("id") id: string) {
+    return this.salesService.convertToSale(id);
+  }
+
   @Get(":id/invoice")
   async getInvoice(@Param("id") id: string, @Res() res: Response) {
+    const sale = await this.salesService.findById(id);
     const buffer = await this.salesService.generateInvoicePdf(id);
     const shortId = id.slice(0, 8);
+    const prefix = sale.kind === "quote" ? "devis" : "facture";
     res.set({
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="facture-${shortId}.pdf"`,
+      "Content-Disposition": `attachment; filename="${prefix}-${shortId}.pdf"`,
       "Content-Length": buffer.length,
     });
     res.send(buffer);

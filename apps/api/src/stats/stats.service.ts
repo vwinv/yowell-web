@@ -49,6 +49,8 @@ export class StatsService {
     const inRange = (day: string) => day >= from && day <= to;
 
     for (const sale of sales) {
+      if (sale.kind === "quote") continue;
+
       const saleDay = sale.orderedAt.slice(0, 10);
       if (!inRange(saleDay)) continue;
 

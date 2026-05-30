@@ -19,7 +19,9 @@ import { ClientsService } from "../clients/clients.service";
 import {
   mapSale,
   toPrismaJuiceVolume,
+  toPrismaSaleKind,
   toPrismaSalePaymentStatus,
+  toSharedJuiceVolume,
 } from "../prisma/prisma.mappers";
 import { PrismaService } from "../prisma/prisma.service";
 import { buildSaleInvoicePdf } from "./sales-invoice.pdf";
@@ -44,6 +46,7 @@ export class SalesService {
         enabled: boolean;
       }[];
     }[],
+    options: { skipStockCheck?: boolean } = {},
   ): SaleLineItem[] {
     const lines: SaleLineItem[] = [];
 
@@ -63,7 +66,7 @@ export class SalesService {
         );
       }
 
-      if (format.quantity < item.quantity) {
+      if (!options.skipStockCheck && format.quantity < item.quantity) {
         throw new BadRequestException(
           `Stock insuffisant pour ${product.name} (${item.volume}) : ${format.quantity} disponible(s).`,
         );
@@ -126,6 +129,8 @@ export class SalesService {
     let revenueMonth = 0;
 
     for (const sale of sales) {
+      if (sale.kind === "quote") continue;
+
       const d = new Date(sale.orderedAt);
       const saleDay = sale.orderedAt.slice(0, 10);
       if (saleDay === today) {
@@ -154,6 +159,8 @@ export class SalesService {
       throw new BadRequestException("La commande doit contenir au moins un article.");
     }
 
+    const isQuote = input.kind === "quote";
+
     return this.prisma.$transaction(async (tx) => {
       const client = await tx.client.findUnique({
         where: { id: input.clientId },
@@ -172,28 +179,32 @@ export class SalesService {
         },
       });
 
-      const lines = this.buildLineItems(input, products);
+      const lines = this.buildLineItems(input, products, {
+        skipStockCheck: isQuote,
+      });
 
-      for (const line of lines) {
-        const updated = await tx.productFormat.updateMany({
-          where: {
-            productId: line.productId,
-            volume: toPrismaJuiceVolume(line.volume),
-            enabled: true,
-            quantity: {
-              gte: line.quantity,
+      if (!isQuote) {
+        for (const line of lines) {
+          const updated = await tx.productFormat.updateMany({
+            where: {
+              productId: line.productId,
+              volume: toPrismaJuiceVolume(line.volume),
+              enabled: true,
+              quantity: {
+                gte: line.quantity,
+              },
             },
-          },
-          data: {
-            quantity: {
-              decrement: line.quantity,
+            data: {
+              quantity: {
+                decrement: line.quantity,
+              },
             },
-          },
-        });
-        if (updated.count === 0) {
-          throw new BadRequestException(
-            `Stock insuffisant pour ${line.productName} (${line.volume}).`,
-          );
+          });
+          if (updated.count === 0) {
+            throw new BadRequestException(
+              `Stock insuffisant pour ${line.productName} (${line.volume}).`,
+            );
+          }
         }
       }
 
@@ -214,7 +225,10 @@ export class SalesService {
           totalAmount,
           personalization,
           discountAmount,
-          paymentStatus: this.normalizePaymentStatus(input.paymentStatus),
+          kind: isQuote ? toPrismaSaleKind("quote") : toPrismaSaleKind("sale"),
+          paymentStatus: isQuote
+            ? toPrismaSalePaymentStatus("unpaid")
+            : this.normalizePaymentStatus(input.paymentStatus),
           notes: input.notes?.trim() ?? "",
           items: {
             create: lines.map((line) => ({
@@ -251,6 +265,8 @@ export class SalesService {
         throw new NotFoundException("Vente introuvable");
       }
 
+      const isQuote = existing.kind === toPrismaSaleKind("quote");
+
       const client = await tx.client.findUnique({
         where: { id: input.clientId },
       });
@@ -258,19 +274,126 @@ export class SalesService {
         throw new NotFoundException("Client introuvable");
       }
 
-      for (const oldItem of existing.items) {
-        await tx.productFormat.updateMany({
-          where: {
-            productId: oldItem.productId,
-            volume: oldItem.volume,
-          },
-          data: {
-            quantity: {
-              increment: oldItem.quantity,
+      if (!isQuote) {
+        for (const oldItem of existing.items) {
+          await tx.productFormat.updateMany({
+            where: {
+              productId: oldItem.productId,
+              volume: oldItem.volume,
             },
-          },
-        });
+            data: {
+              quantity: {
+                increment: oldItem.quantity,
+              },
+            },
+          });
+        }
       }
+
+      const productIds = [...new Set(input.items.map((item) => item.productId))];
+      const products = await tx.product.findMany({
+        where: { id: { in: productIds } },
+        include: { formats: true },
+      });
+
+      const lines = this.buildLineItems(input, products, {
+        skipStockCheck: isQuote,
+      });
+
+      if (!isQuote) {
+        for (const line of lines) {
+          const updated = await tx.productFormat.updateMany({
+            where: {
+              productId: line.productId,
+              volume: toPrismaJuiceVolume(line.volume),
+              enabled: true,
+              quantity: {
+                gte: line.quantity,
+              },
+            },
+            data: {
+              quantity: {
+                decrement: line.quantity,
+              },
+            },
+          });
+          if (updated.count === 0) {
+            throw new BadRequestException(
+              `Stock insuffisant pour ${line.productName} (${line.volume}).`,
+            );
+          }
+        }
+      }
+
+      await tx.saleItem.deleteMany({ where: { saleId: id } });
+
+      const orderedAt = input.orderedAt
+        ? new Date(input.orderedAt)
+        : existing.orderedAt;
+
+      const totalAmount = computeSaleTotalAmount(
+        lines,
+        personalization,
+        discountAmount,
+      );
+
+      const sale = await tx.sale.update({
+        where: { id },
+        data: {
+          clientId: client.id,
+          clientName: client.name,
+          orderedAt,
+          totalAmount,
+          personalization,
+          discountAmount,
+          paymentStatus: isQuote
+            ? toPrismaSalePaymentStatus("unpaid")
+            : input.paymentStatus
+              ? this.normalizePaymentStatus(input.paymentStatus)
+              : existing.paymentStatus,
+          notes: input.notes?.trim() ?? "",
+          items: {
+            create: lines.map((line) => ({
+              productId: line.productId,
+              productName: line.productName,
+              volume: toPrismaJuiceVolume(line.volume),
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              lineTotal: line.lineTotal,
+            })),
+          },
+        },
+        include: { items: true },
+      });
+
+      return mapSale(sale);
+    });
+  }
+
+  async convertToSale(id: string): Promise<Sale> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.sale.findUnique({
+        where: { id },
+        include: { items: true },
+      });
+      if (!existing) {
+        throw new NotFoundException("Devis introuvable");
+      }
+      if (existing.kind !== toPrismaSaleKind("quote")) {
+        throw new BadRequestException("Cette commande n'est pas un devis.");
+      }
+
+      const input: CreateSaleInput = {
+        clientId: existing.clientId,
+        items: existing.items.map((item) => ({
+          productId: item.productId,
+          volume: toSharedJuiceVolume(item.volume),
+          quantity: item.quantity,
+        })),
+        personalization: existing.personalization,
+        discountAmount: existing.discountAmount,
+        notes: existing.notes,
+      };
 
       const productIds = [...new Set(input.items.map((item) => item.productId))];
       const products = await tx.product.findMany({
@@ -303,41 +426,10 @@ export class SalesService {
         }
       }
 
-      await tx.saleItem.deleteMany({ where: { saleId: id } });
-
-      const orderedAt = input.orderedAt
-        ? new Date(input.orderedAt)
-        : existing.orderedAt;
-
-      const totalAmount = computeSaleTotalAmount(
-        lines,
-        personalization,
-        discountAmount,
-      );
-
       const sale = await tx.sale.update({
         where: { id },
         data: {
-          clientId: client.id,
-          clientName: client.name,
-          orderedAt,
-          totalAmount,
-          personalization,
-          discountAmount,
-          paymentStatus: input.paymentStatus
-            ? this.normalizePaymentStatus(input.paymentStatus)
-            : existing.paymentStatus,
-          notes: input.notes?.trim() ?? "",
-          items: {
-            create: lines.map((line) => ({
-              productId: line.productId,
-              productName: line.productName,
-              volume: toPrismaJuiceVolume(line.volume),
-              quantity: line.quantity,
-              unitPrice: line.unitPrice,
-              lineTotal: line.lineTotal,
-            })),
-          },
+          kind: toPrismaSaleKind("sale"),
         },
         include: { items: true },
       });
@@ -352,10 +444,15 @@ export class SalesService {
   ): Promise<Sale> {
     const existing = await this.prisma.sale.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, kind: true },
     });
     if (!existing) {
       throw new NotFoundException("Vente introuvable");
+    }
+    if (existing.kind === toPrismaSaleKind("quote")) {
+      throw new BadRequestException(
+        "Un devis ne peut pas être marqué payé — convertis-le d'abord en vente.",
+      );
     }
 
     const sale = await this.prisma.sale.update({

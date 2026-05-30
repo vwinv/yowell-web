@@ -765,6 +765,11 @@ a {
   color: #b91c1c;
 }
 
+.badge--quote {
+  background: #e8eaf6;
+  color: #3949ab;
+}
+
 .payment-cell {
   display: flex;
   flex-direction: column;

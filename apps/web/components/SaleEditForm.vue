@@ -42,6 +42,8 @@ const submitting = ref(false);
 const error = ref("");
 const success = ref("");
 
+const isQuote = computed(() => props.sale.kind === "quote");
+
 function productById(id: string) {
   return props.products.find((p) => p.id === id);
 }
@@ -139,11 +141,13 @@ async function submit() {
     return;
   }
 
-  for (const line of validLines) {
-    if (line.quantity > maxQuantityForLine(line)) {
-      const p = productById(line.productId);
-      error.value = `Stock insuffisant pour ${p?.name} (${line.volume}) : ${maxQuantityForLine(line)} disponible(s).`;
-      return;
+  if (!isQuote.value) {
+    for (const line of validLines) {
+      if (line.quantity > maxQuantityForLine(line)) {
+        const p = productById(line.productId);
+        error.value = `Stock insuffisant pour ${p?.name} (${line.volume}) : ${maxQuantityForLine(line)} disponible(s).`;
+        return;
+      }
     }
   }
 
@@ -170,7 +174,7 @@ async function submit() {
         paymentStatus: paymentStatus.value,
       },
     });
-    success.value = "Vente modifiée.";
+    success.value = isQuote.value ? "Devis modifié." : "Vente modifiée.";
     emit("success");
   } catch {
     error.value =
@@ -196,7 +200,7 @@ async function submit() {
         <label for="edit-sale-date">Date de commande *</label>
         <input id="edit-sale-date" v-model="orderedAt" type="date" required />
       </div>
-      <div class="form-field">
+      <div v-if="!isQuote" class="form-field">
         <label for="edit-sale-payment">Paiement</label>
         <select id="edit-sale-payment" v-model="paymentStatus">
           <option value="unpaid">Non payé</option>
@@ -226,7 +230,11 @@ async function submit() {
                 :key="f.volume"
                 :value="f.volume"
               >
-                {{ f.volume }} — {{ formatCfa(f.price) }} (stock: {{ f.quantity }})
+                {{
+                  isQuote
+                    ? `${f.volume} — ${formatCfa(f.price)}`
+                    : `${f.volume} — ${formatCfa(f.price)} (stock: ${f.quantity})`
+                }}
               </option>
             </select>
           </div>
@@ -236,7 +244,7 @@ async function submit() {
               v-model.number="line.quantity"
               type="number"
               min="1"
-              :max="maxQuantityForLine(line)"
+              :max="isQuote ? undefined : maxQuantityForLine(line)"
             />
           </div>
           <div class="form-field">

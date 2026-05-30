@@ -79,7 +79,7 @@ export function buildSaleInvoicePdf(sale: Sale, client: Client): Promise<Buffer>
     doc
       .fontSize(20)
       .fillColor("#111111")
-      .text("FACTURE", left + pageWidth - 120, headerTop, {
+      .text(sale.kind === "quote" ? "DEVIS" : "FACTURE", left + pageWidth - 120, headerTop, {
         width: 120,
         align: "right",
       });
@@ -127,7 +127,9 @@ export function buildSaleInvoicePdf(sale: Sale, client: Client): Promise<Buffer>
       .fontSize(10)
       .fillColor("#444444")
       .text(
-        `Statut paiement : ${paymentLabel(sale.paymentStatus)}`,
+        sale.kind === "quote"
+          ? "Document non engageant — valable 30 jours"
+          : `Statut paiement : ${paymentLabel(sale.paymentStatus)}`,
         left + pageWidth - 200,
         clientY + 18,
         { width: 200, align: "right" },

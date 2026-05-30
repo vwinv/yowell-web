@@ -16,14 +16,19 @@ export function useSaleInvoice() {
         .replace(/[^a-zA-Z0-9]+/g, "-")
         .replace(/^-|-$/g, "")
         .toLowerCase();
+      const prefix = sale.kind === "quote" ? "devis" : "facture";
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `facture-${slug || "client"}-${date}.pdf`;
+      link.download = `${prefix}-${slug || "client"}-${date}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert("Impossible de générer la facture PDF.");
+      alert(
+        sale.kind === "quote"
+          ? "Impossible de générer le devis PDF."
+          : "Impossible de générer la facture PDF.",
+      );
     } finally {
       generatingId.value = null;
     }

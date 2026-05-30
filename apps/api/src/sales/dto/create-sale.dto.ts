@@ -69,4 +69,8 @@ export class CreateSaleDto {
   @IsOptional()
   @IsIn(["paid", "unpaid"])
   paymentStatus?: "paid" | "unpaid";
+
+  @IsOptional()
+  @IsIn(["sale", "quote"])
+  kind?: "sale" | "quote";
 }

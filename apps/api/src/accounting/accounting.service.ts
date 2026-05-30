@@ -184,7 +184,7 @@ export class AccountingService implements OnModuleInit {
     });
 
     for (const sale of sales) {
-      if (sale.paymentStatus !== "paid") continue;
+      if (sale.kind === "quote" || sale.paymentStatus !== "paid") continue;
       entries.push({
         id: `sale-${sale.id}`,
         date: sale.orderedAt,
