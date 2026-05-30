@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Client, Sale } from "@yowell/shared";
+import { SALE_PERSONALIZATION_FEE, saleTotal } from "@yowell/shared";
 import PDFDocument from "pdfkit";
 
 const BRAND = "Yo'Well";
@@ -212,18 +213,35 @@ export function buildSaleInvoicePdf(sale: Sale, client: Client): Promise<Buffer>
     }
 
     y += 12;
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(12)
-      .fillColor("#0d5c52")
-      .text("Total", left + pageWidth - colWidths.total - colWidths.unit, y, {
-        width: colWidths.unit - 10,
+    const subtotal = saleTotal(sale.items);
+    const personalizationFee = sale.personalization
+      ? SALE_PERSONALIZATION_FEE * sale.items.reduce((sum, item) => sum + item.quantity, 0)
+      : 0;
+
+    const drawTotalLine = (label: string, amount: number, bold = false) => {
+      doc
+        .font(bold ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(bold ? 12 : 10)
+        .fillColor(bold ? "#0d5c52" : "#444444")
+        .text(label, left + pageWidth - colWidths.total - colWidths.unit, y, {
+          width: colWidths.unit - 10,
+          align: "right",
+        });
+      doc.text(formatCfaPdf(amount), left + pageWidth - colWidths.total, y, {
+        width: colWidths.total - 6,
         align: "right",
       });
-    doc.text(formatCfaPdf(sale.totalAmount), left + pageWidth - colWidths.total, y, {
-      width: colWidths.total - 6,
-      align: "right",
-    });
+      y += 18;
+    };
+
+    drawTotalLine("Sous-total", subtotal);
+    if (sale.personalization) {
+      drawTotalLine("Personnalisation", personalizationFee);
+    }
+    if (sale.discountAmount > 0) {
+      drawTotalLine("Remise", -sale.discountAmount);
+    }
+    drawTotalLine("Total", sale.totalAmount, true);
 
     if (sale.notes.trim()) {
       y += 36;

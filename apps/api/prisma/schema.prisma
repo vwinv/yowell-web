@@ -79,9 +79,11 @@ model Sale {
   clientId      String
   clientName    String
   orderedAt     DateTime
-  totalAmount   Int
-  paymentStatus SalePaymentStatus @default(UNPAID)
-  notes         String            @default("")
+  totalAmount      Int
+  personalization  Boolean           @default(false)
+  discountAmount   Int                 @default(0)
+  paymentStatus    SalePaymentStatus   @default(UNPAID)
+  notes            String              @default("")
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   items         SaleItem[]

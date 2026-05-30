@@ -383,6 +383,8 @@ export type CreateClientInput = {
 };
 
 /** Ventes */
+export const SALE_PERSONALIZATION_FEE = 100;
+
 export type SalePaymentStatus = "paid" | "unpaid";
 
 export type SaleLineItem = {
@@ -401,6 +403,10 @@ export type Sale = {
   orderedAt: string;
   items: SaleLineItem[];
   totalAmount: number;
+  /** +100 FCFA par bouteille */
+  personalization: boolean;
+  /** Remise appliquée sur le total (FCFA) */
+  discountAmount: number;
   paymentStatus: SalePaymentStatus;
   notes: string;
   createdAt: string;
@@ -424,6 +430,8 @@ export type CreateSaleInput = {
   clientId: string;
   orderedAt?: string;
   items: CreateSaleLineInput[];
+  personalization?: boolean;
+  discountAmount?: number;
   paymentStatus?: SalePaymentStatus;
   notes?: string;
 };
@@ -436,12 +444,31 @@ export type UpdateSaleInput = {
   clientId: string;
   orderedAt?: string;
   items: CreateSaleLineInput[];
-  /** Montant final facturé (peut différer du total des lignes : remise, supplément, etc.) */
-  totalAmount: number;
+  personalization?: boolean;
+  discountAmount?: number;
   notes?: string;
   paymentStatus?: SalePaymentStatus;
 };
 
 export function saleTotal(items: SaleLineItem[]): number {
   return items.reduce((sum, item) => sum + item.lineTotal, 0);
+}
+
+export function saleBottleCount(
+  items: Pick<SaleLineItem, "quantity">[],
+): number {
+  return items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+export function computeSaleTotalAmount(
+  items: Pick<SaleLineItem, "lineTotal" | "quantity">[],
+  personalization = false,
+  discountAmount = 0,
+): number {
+  const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const personalizationFee = personalization
+    ? SALE_PERSONALIZATION_FEE * saleBottleCount(items)
+    : 0;
+  const total = subtotal + personalizationFee - Math.max(0, discountAmount);
+  return Math.max(0, Math.round(total));
 }

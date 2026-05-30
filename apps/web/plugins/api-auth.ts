@@ -21,6 +21,11 @@ export default defineNuxtPlugin({
           token.value,
         );
       },
+      onResponseError({ response }) {
+        if (response.status === 401) {
+          handleUnauthorized({ statusCode: 401 });
+        }
+      },
     });
 
     globalThis.$fetch = authFetch;

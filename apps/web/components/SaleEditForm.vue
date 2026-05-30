@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { JuiceProduct, JuiceVolume, Sale } from "@yowell/shared";
-import { formatCfa } from "@yowell/shared";
+import {
+  SALE_PERSONALIZATION_FEE,
+  computeSaleTotalAmount,
+  formatCfa,
+  saleBottleCount,
+} from "@yowell/shared";
 
 const props = defineProps<{
   sale: Sale;
@@ -23,7 +28,8 @@ const clientId = ref(props.sale.clientId);
 const orderedAt = ref(props.sale.orderedAt.slice(0, 10));
 const notes = ref(props.sale.notes);
 const paymentStatus = ref(props.sale.paymentStatus);
-const totalAmount = ref<number | "">(props.sale.totalAmount);
+const personalization = ref(props.sale.personalization);
+const discountAmount = ref<number | "">(props.sale.discountAmount || "");
 const lines = ref<OrderLine[]>(
   props.sale.items.map((item) => ({
     productId: item.productId,
@@ -80,6 +86,28 @@ const linesSubtotal = computed(() =>
   lines.value.reduce((sum, line) => sum + lineTotal(line), 0),
 );
 
+const validLinesForTotal = computed(() =>
+  lines.value.filter((l) => l.productId && l.quantity > 0),
+);
+
+const personalizationFee = computed(() =>
+  personalization.value
+    ? SALE_PERSONALIZATION_FEE * saleBottleCount(validLinesForTotal.value)
+    : 0,
+);
+
+const finalTotal = computed(() => {
+  const items = validLinesForTotal.value.map((line) => ({
+    lineTotal: lineTotal(line),
+    quantity: line.quantity,
+  }));
+  return computeSaleTotalAmount(
+    items,
+    personalization.value,
+    discountAmount.value === "" ? 0 : Number(discountAmount.value),
+  );
+});
+
 function addLine() {
   const first = props.products[0];
   lines.value.push({
@@ -119,8 +147,8 @@ async function submit() {
     }
   }
 
-  if (totalAmount.value === "" || Number(totalAmount.value) < 0) {
-    error.value = "Indique un montant total valide.";
+  if (discountAmount.value !== "" && Number(discountAmount.value) < 0) {
+    error.value = "La remise doit être positive ou nulle.";
     return;
   }
 
@@ -136,7 +164,8 @@ async function submit() {
           volume: l.volume,
           quantity: l.quantity,
         })),
-        totalAmount: Number(totalAmount.value),
+        personalization: personalization.value,
+        discountAmount: discountAmount.value === "" ? 0 : Number(discountAmount.value),
         notes: notes.value.trim(),
         paymentStatus: paymentStatus.value,
       },
@@ -231,29 +260,38 @@ async function submit() {
     </fieldset>
 
     <p class="order-total">
-      Total des lignes : <strong>{{ formatCfa(linesSubtotal) }}</strong>
+      Sous-total : <strong>{{ formatCfa(linesSubtotal) }}</strong>
     </p>
 
-    <div class="form-field form-field--wide" style="margin-top: 1rem">
-      <label for="edit-sale-total">Montant total facturé (FCFA) *</label>
-      <input
-        id="edit-sale-total"
-        v-model.number="totalAmount"
-        type="number"
-        min="0"
-        step="1"
-        required
-      />
-      <small>
-        Ajuste ce montant pour une remise ou si le client paie plus. La facture utilisera ce total.
-      </small>
-      <p
-        v-if="totalAmount !== '' && Number(totalAmount) !== linesSubtotal"
-        class="form-field__hint"
-        style="margin-top: 0.35rem"
-      >
-        Écart avec le total des lignes :
-        {{ formatCfa(Number(totalAmount) - linesSubtotal) }}
+    <div class="form-grid" style="margin-top: 1rem">
+      <div class="form-field">
+        <label class="format-row__check">
+          <input v-model="personalization" type="checkbox" />
+          <span>Personnalisation (+{{ formatCfa(SALE_PERSONALIZATION_FEE) }} / bouteille)</span>
+        </label>
+      </div>
+      <div class="form-field">
+        <label for="edit-sale-discount">Remise (FCFA)</label>
+        <input
+          id="edit-sale-discount"
+          v-model.number="discountAmount"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="0"
+        />
+      </div>
+    </div>
+
+    <div class="order-total-breakdown">
+      <p v-if="personalization">
+        Personnalisation : <strong>{{ formatCfa(personalizationFee) }}</strong>
+      </p>
+      <p v-if="discountAmount !== '' && Number(discountAmount) > 0">
+        Remise : <strong>-{{ formatCfa(Number(discountAmount)) }}</strong>
+      </p>
+      <p class="order-total">
+        Total commande : <strong>{{ formatCfa(finalTotal) }}</strong>
       </p>
     </div>
 

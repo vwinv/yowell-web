@@ -1,14 +1,47 @@
 import type { Ref, WatchSource } from "vue";
 import type { UseFetchOptions } from "nuxt/app";
 
+import type { AppUser } from "@yowell/shared";
+
 const AUTH_COOKIE = "yowell-auth";
+/** Durée de session alignée sur le JWT API (24 h) */
+export const AUTH_SESSION_MAX_AGE = 60 * 60 * 24;
 
 export function useAuthCookie() {
   return useCookie<string | null>(AUTH_COOKIE, {
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: AUTH_SESSION_MAX_AGE,
     sameSite: "lax",
     path: "/",
   });
+}
+
+function httpStatus(error: unknown): number | undefined {
+  if (error && typeof error === "object" && "statusCode" in error) {
+    return (error as { statusCode?: number }).statusCode;
+  }
+  if (error && typeof error === "object" && "response" in error) {
+    const response = (error as { response?: { status?: number } }).response;
+    return response?.status;
+  }
+  return undefined;
+}
+
+export function clearAuthSession() {
+  const token = useAuthCookie();
+  token.value = null;
+  useState<AppUser | null>("auth-user").value = null;
+}
+
+/** Session expirée ou invalide → déconnexion et page login */
+export function handleUnauthorized(error: unknown): boolean {
+  if (httpStatus(error) !== 401) return false;
+  const token = useAuthCookie();
+  if (!token.value) return false;
+  clearAuthSession();
+  if (import.meta.client) {
+    navigateTo("/login");
+  }
+  return true;
 }
 
 /** Token accessible depuis les callbacks async (hors setup) */
@@ -70,12 +103,17 @@ export function apiFetch<T>(
       fetchOptions.headers as HeadersInit | undefined,
       token.value,
     ),
-  }).then((result) => {
-    if (shouldReload && import.meta.client) {
-      window.location.reload();
-    }
-    return result;
-  });
+  })
+    .then((result) => {
+      if (shouldReload && import.meta.client) {
+        window.location.reload();
+      }
+      return result;
+    })
+    .catch((error) => {
+      handleUnauthorized(error);
+      throw error;
+    });
 }
 
 /** useFetch avec jeton JWT */
@@ -93,6 +131,11 @@ export function useApiFetch<T>(
           reqOptions.headers as HeadersInit | undefined,
           token.value,
         );
+      }
+    },
+    onResponseError({ response }) {
+      if (response.status === 401) {
+        handleUnauthorized({ statusCode: 401 });
       }
     },
   });

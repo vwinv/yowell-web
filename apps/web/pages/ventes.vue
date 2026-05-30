@@ -199,6 +199,15 @@ async function markAsPaid(sale: Sale) {
                 <td><strong>{{ formatCfa(sale.totalAmount) }}</strong></td>
                 <td class="payment-cell">
                   <span
+                    v-if="sale.personalization || sale.discountAmount > 0"
+                    class="sale-adjustments"
+                  >
+                    <span v-if="sale.personalization">Perso.</span>
+                    <span v-if="sale.discountAmount > 0">
+                      Remise {{ formatCfa(sale.discountAmount) }}
+                    </span>
+                  </span>
+                  <span
                     class="badge"
                     :class="{
                       'badge--paid': sale.paymentStatus === 'paid',

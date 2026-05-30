@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { JuiceProduct, JuiceVolume } from "@yowell/shared";
-import { formatCfa } from "@yowell/shared";
+import {
+  SALE_PERSONALIZATION_FEE,
+  computeSaleTotalAmount,
+  formatCfa,
+  saleBottleCount,
+} from "@yowell/shared";
 
 const emit = defineEmits<{
   success: [];
@@ -20,6 +25,8 @@ const props = defineProps<{
 const clientId = ref("");
 const orderedAt = ref(new Date().toISOString().slice(0, 10));
 const notes = ref("");
+const personalization = ref(false);
+const discountAmount = ref<number | "">("");
 const lines = ref<OrderLine[]>([
   { productId: "", volume: "1L", quantity: 1 },
 ]);
@@ -83,9 +90,31 @@ function lineTotal(line: OrderLine): number {
   return lineUnitPrice(line) * line.quantity;
 }
 
-const orderTotal = computed(() =>
+const linesSubtotal = computed(() =>
   lines.value.reduce((sum, line) => sum + lineTotal(line), 0),
 );
+
+const validLinesForTotal = computed(() =>
+  lines.value.filter((l) => l.productId && l.quantity > 0),
+);
+
+const personalizationFee = computed(() =>
+  personalization.value
+    ? SALE_PERSONALIZATION_FEE * saleBottleCount(validLinesForTotal.value)
+    : 0,
+);
+
+const finalTotal = computed(() => {
+  const items = validLinesForTotal.value.map((line) => ({
+    lineTotal: lineTotal(line),
+    quantity: line.quantity,
+  }));
+  return computeSaleTotalAmount(
+    items,
+    personalization.value,
+    discountAmount.value === "" ? 0 : Number(discountAmount.value),
+  );
+});
 
 function addLine() {
   const first = props.products[0];
@@ -107,6 +136,8 @@ function resetForm() {
   clientId.value = props.clients[0]?.id ?? "";
   orderedAt.value = new Date().toISOString().slice(0, 10);
   notes.value = "";
+  personalization.value = false;
+  discountAmount.value = "";
   lines.value = [{ productId: props.products[0]?.id ?? "", volume: "1L", quantity: 1 }];
 }
 
@@ -151,6 +182,8 @@ async function submit() {
           volume: l.volume,
           quantity: l.quantity,
         })),
+        personalization: personalization.value,
+        discountAmount: discountAmount.value === "" ? 0 : Number(discountAmount.value),
         notes: notes.value.trim(),
       },
     });
@@ -239,8 +272,40 @@ async function submit() {
     </fieldset>
 
     <p class="order-total">
-      Total commande : <strong>{{ formatCfa(orderTotal) }}</strong>
+      Sous-total : <strong>{{ formatCfa(linesSubtotal) }}</strong>
     </p>
+
+    <div class="form-grid" style="margin-top: 1rem">
+      <div class="form-field">
+        <label class="format-row__check">
+          <input v-model="personalization" type="checkbox" />
+          <span>Personnalisation (+{{ formatCfa(SALE_PERSONALIZATION_FEE) }} / bouteille)</span>
+        </label>
+      </div>
+      <div class="form-field">
+        <label for="sale-discount">Remise (FCFA)</label>
+        <input
+          id="sale-discount"
+          v-model.number="discountAmount"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="0"
+        />
+      </div>
+    </div>
+
+    <div class="order-total-breakdown">
+      <p v-if="personalization">
+        Personnalisation : <strong>{{ formatCfa(personalizationFee) }}</strong>
+      </p>
+      <p v-if="discountAmount !== '' && Number(discountAmount) > 0">
+        Remise : <strong>-{{ formatCfa(Number(discountAmount)) }}</strong>
+      </p>
+      <p class="order-total">
+        Total commande : <strong>{{ formatCfa(finalTotal) }}</strong>
+      </p>
+    </div>
 
     <div class="form-field form-field--wide">
       <label for="sale-notes">Notes</label>

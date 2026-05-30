@@ -4,8 +4,9 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { JuiceVolume as PrismaJuiceVolume, SalePaymentStatus as PrismaSalePaymentStatus } from "@prisma/client";
-import type {
-  CreateSaleInput,
+import {
+  computeSaleTotalAmount,
+  type CreateSaleInput,
   Sale,
   SaleLineItem,
   SalePaymentStatus,
@@ -197,13 +198,23 @@ export class SalesService {
       }
 
       const orderedAt = input.orderedAt ? new Date(input.orderedAt) : new Date();
+      const personalization = input.personalization ?? false;
+      const discountAmount = Math.max(0, Math.round(input.discountAmount ?? 0));
+      const totalAmount = computeSaleTotalAmount(
+        lines,
+        personalization,
+        discountAmount,
+      );
+
       const sale = await tx.sale.create({
         data: {
           clientId: client.id,
           clientName: client.name,
           orderedAt,
-          totalAmount: lines.reduce((sum, line) => sum + line.lineTotal, 0),
-          paymentStatus: PrismaSalePaymentStatus.UNPAID,
+          totalAmount,
+          personalization,
+          discountAmount,
+          paymentStatus: this.normalizePaymentStatus(input.paymentStatus),
           notes: input.notes?.trim() ?? "",
           items: {
             create: lines.map((line) => ({
@@ -227,9 +238,9 @@ export class SalesService {
     if (!input.items.length) {
       throw new BadRequestException("La commande doit contenir au moins un article.");
     }
-    if (!Number.isFinite(input.totalAmount) || input.totalAmount < 0) {
-      throw new BadRequestException("Le montant total doit être positif ou nul.");
-    }
+
+    const personalization = input.personalization ?? false;
+    const discountAmount = Math.max(0, Math.round(input.discountAmount ?? 0));
 
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.sale.findUnique({
@@ -298,13 +309,21 @@ export class SalesService {
         ? new Date(input.orderedAt)
         : existing.orderedAt;
 
+      const totalAmount = computeSaleTotalAmount(
+        lines,
+        personalization,
+        discountAmount,
+      );
+
       const sale = await tx.sale.update({
         where: { id },
         data: {
           clientId: client.id,
           clientName: client.name,
           orderedAt,
-          totalAmount: Math.round(input.totalAmount),
+          totalAmount,
+          personalization,
+          discountAmount,
           paymentStatus: input.paymentStatus
             ? this.normalizePaymentStatus(input.paymentStatus)
             : existing.paymentStatus,

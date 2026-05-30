@@ -15,15 +15,7 @@ export function useAuth() {
     try {
       user.value = await apiFetch<AppUser>(useApiUrl("/auth/me"));
       return user.value;
-    } catch (error: unknown) {
-      const status =
-        error && typeof error === "object" && "statusCode" in error
-          ? (error as { statusCode?: number }).statusCode
-          : undefined;
-      if (status === 401) {
-        token.value = null;
-        user.value = null;
-      }
+    } catch {
       return null;
     }
   }

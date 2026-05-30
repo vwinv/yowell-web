@@ -1,11 +1,11 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -14,6 +14,16 @@ import {
 } from "class-validator";
 
 import type { JuiceVolume } from "@yowell/shared";
+
+function toBool(value: unknown): boolean {
+  return value === true || value === "true" || value === "1";
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  if (value === undefined || value === "") return fallback;
+  const n = Number.parseFloat(String(value));
+  return Number.isNaN(n) ? fallback : n;
+}
 
 export class UpdateSaleLineDto {
   @IsUUID()
@@ -41,9 +51,16 @@ export class UpdateSaleDto {
   @Type(() => UpdateSaleLineDto)
   items!: UpdateSaleLineDto[];
 
-  @IsNumber()
+  @IsOptional()
+  @Transform(({ value }) => toBool(value))
+  @IsBoolean()
+  personalization?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => toNumber(value, 0))
+  @IsInt()
   @Min(0)
-  totalAmount!: number;
+  discountAmount?: number;
 
   @IsOptional()
   @IsString()

@@ -15,7 +15,7 @@ import { RolesGuard } from "./roles.guard";
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>("JWT_SECRET") ?? "yowell-dev-secret-change-me",
-        signOptions: { expiresIn: "7d" },
+        signOptions: { expiresIn: "24h" },
       }),
       inject: [ConfigService],
     }),

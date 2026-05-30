@@ -209,6 +209,8 @@ export function mapSale(sale: PrismaSaleRecord): Sale {
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map(mapSaleLineItem),
     totalAmount: sale.totalAmount,
+    personalization: sale.personalization,
+    discountAmount: sale.discountAmount,
     paymentStatus: toSharedSalePaymentStatus(sale.paymentStatus),
     notes: sale.notes,
     createdAt: dateToIso(sale.createdAt),
