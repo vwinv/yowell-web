@@ -6,7 +6,7 @@ import type {
   SalePaymentStatus,
   SalesOverview,
 } from "@yowell/shared";
-import { formatCfa } from "@yowell/shared";
+import { formatCfa, PAYMENT_CHANNEL_OPTIONS, paymentChannelLabel } from "@yowell/shared";
 
 const { data, pending, refresh } = await useApiFetch<SalesOverview>(
   useApiUrl("/sales/overview"),
@@ -92,7 +92,12 @@ async function onSaleEditSuccess() {
 
 const convertingId = ref<string | null>(null);
 const updatingPaymentId = ref<string | null>(null);
+const pendingPaymentChannels = ref<Record<string, "cash" | "om" | "wave">>({});
 const { generatingId: generatingInvoiceId, downloadInvoice } = useSaleInvoice();
+
+function paymentChannelForSale(sale: Sale): "cash" | "om" | "wave" {
+  return pendingPaymentChannels.value[sale.id] ?? "cash";
+}
 
 async function convertToSale(sale: Sale) {
   if (sale.kind !== "quote") return;
@@ -125,7 +130,10 @@ async function markAsPaid(sale: Sale) {
   try {
     await apiFetch(useApiUrl(`/sales/${sale.id}/payment-status`), {
       method: "PATCH",
-      body: { paymentStatus: "paid" satisfies SalePaymentStatus },
+      body: {
+        paymentStatus: "paid" satisfies SalePaymentStatus,
+        paymentChannel: paymentChannelForSale(sale),
+      },
     });
     await Promise.all([
       refresh(),
@@ -267,6 +275,7 @@ async function markAsPaid(sale: Sale) {
                 <th>Commande</th>
                 <th>Total</th>
                 <th>Paiement</th>
+                <th>Canal</th>
                 <th>Notes</th>
                 <th />
               </tr>
@@ -339,6 +348,27 @@ async function markAsPaid(sale: Sale) {
                         : "Convertir en vente"
                     }}
                   </button>
+                </td>
+                <td>
+                  <span v-if="sale.paymentStatus === 'paid' && sale.paymentChannel">
+                    {{ paymentChannelLabel(sale.paymentChannel) }}
+                  </span>
+                  <select
+                    v-else-if="sale.kind !== 'quote' && sale.paymentStatus === 'unpaid'"
+                    :value="paymentChannelForSale(sale)"
+                    class="payment-channel-select"
+                    :disabled="updatingPaymentId === sale.id"
+                    @change="pendingPaymentChannels[sale.id] = ($event.target as HTMLSelectElement).value as 'cash' | 'om' | 'wave'"
+                  >
+                    <option
+                      v-for="option in PAYMENT_CHANNEL_OPTIONS"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
+                  <span v-else>—</span>
                 </td>
                 <td>{{ sale.notes || "—" }}</td>
                 <td class="table-actions">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCfa } from "@yowell/shared";
+import { formatCfa, PAYMENT_CHANNEL_OPTIONS } from "@yowell/shared";
 
 const emit = defineEmits<{
   success: [];
@@ -17,6 +17,7 @@ type FeeDraft = {
 };
 
 const date = ref(new Date().toISOString().slice(0, 10));
+const paymentChannel = ref<"cash" | "om" | "wave">("cash");
 const lines = ref<LineDraft[]>([
   { label: "", quantity: 0.5, unitPrice: "" },
 ]);
@@ -61,6 +62,7 @@ function removeFee(index: number) {
 
 function resetForm() {
   date.value = new Date().toISOString().slice(0, 10);
+  paymentChannel.value = "cash";
   lines.value = [{ label: "", quantity: 0.5, unitPrice: "" }];
   fees.value = [];
 }
@@ -95,6 +97,7 @@ async function submit() {
           label: f.label.trim(),
           amount: Number(f.amount),
         })),
+        paymentChannel: paymentChannel.value,
       },
     });
     success.value = "Course enregistrée.";
@@ -110,9 +113,23 @@ async function submit() {
 
 <template>
   <form @submit.prevent="submit">
-    <div class="form-field" style="max-width: 220px; margin-bottom: 1.25rem">
-      <label for="run-date">Date de la course *</label>
-      <input id="run-date" v-model="date" type="date" required />
+    <div class="form-grid" style="max-width: 520px; margin-bottom: 1.25rem">
+      <div class="form-field">
+        <label for="run-date">Date de la course *</label>
+        <input id="run-date" v-model="date" type="date" required />
+      </div>
+      <div class="form-field">
+        <label for="run-payment">Moyen de paiement *</label>
+        <select id="run-payment" v-model="paymentChannel" required>
+          <option
+            v-for="option in PAYMENT_CHANNEL_OPTIONS"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <fieldset class="order-lines">

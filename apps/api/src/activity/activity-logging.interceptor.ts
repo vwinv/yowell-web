@@ -58,6 +58,9 @@ function humanSummary(method: string, path: string): string {
   if (method === "PATCH" && base === "/api/accounting/caisse") {
     return "Mise à jour de la caisse";
   }
+  if (method === "PATCH" && base === "/api/accounting/balances") {
+    return "Mise à jour des soldes par canal";
+  }
 
   if (method === "POST" && base === "/api/stock/products") {
     return "Création d'un produit";

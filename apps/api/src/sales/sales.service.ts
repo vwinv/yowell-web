@@ -13,15 +13,18 @@ import {
   SalesOverview,
   UpdateSaleInput,
   UpdateSalePaymentInput,
+  type PaymentChannel,
 } from "@yowell/shared";
 
 import { ClientsService } from "../clients/clients.service";
 import {
   mapSale,
   toPrismaJuiceVolume,
+  toPrismaPaymentChannel,
   toPrismaSaleKind,
   toPrismaSalePaymentStatus,
   toSharedJuiceVolume,
+  toSharedPaymentChannel,
 } from "../prisma/prisma.mappers";
 import { PrismaService } from "../prisma/prisma.service";
 import { buildSaleInvoicePdf } from "./sales-invoice.pdf";
@@ -217,6 +220,16 @@ export class SalesService {
         discountAmount,
       );
 
+      const paymentStatus = isQuote
+        ? toPrismaSalePaymentStatus("unpaid")
+        : this.normalizePaymentStatus(input.paymentStatus);
+      const paymentChannel = isQuote
+        ? null
+        : this.resolvePaymentChannel(
+            paymentStatus === toPrismaSalePaymentStatus("paid") ? "paid" : "unpaid",
+            input.paymentChannel,
+          );
+
       const sale = await tx.sale.create({
         data: {
           clientId: client.id,
@@ -226,9 +239,8 @@ export class SalesService {
           personalization,
           discountAmount,
           kind: isQuote ? toPrismaSaleKind("quote") : toPrismaSaleKind("sale"),
-          paymentStatus: isQuote
-            ? toPrismaSalePaymentStatus("unpaid")
-            : this.normalizePaymentStatus(input.paymentStatus),
+          paymentStatus,
+          paymentChannel,
           notes: input.notes?.trim() ?? "",
           items: {
             create: lines.map((line) => ({
@@ -337,6 +349,23 @@ export class SalesService {
         discountAmount,
       );
 
+      const nextPaymentStatus = isQuote
+        ? toPrismaSalePaymentStatus("unpaid")
+        : input.paymentStatus
+          ? this.normalizePaymentStatus(input.paymentStatus)
+          : existing.paymentStatus;
+      const sharedPaymentStatus =
+        nextPaymentStatus === toPrismaSalePaymentStatus("paid") ? "paid" : "unpaid";
+      const paymentChannel = isQuote
+        ? null
+        : this.resolvePaymentChannel(
+            sharedPaymentStatus,
+            input.paymentChannel ?? undefined,
+            existing.paymentChannel
+              ? toSharedPaymentChannel(existing.paymentChannel)
+              : undefined,
+          );
+
       const sale = await tx.sale.update({
         where: { id },
         data: {
@@ -346,11 +375,8 @@ export class SalesService {
           totalAmount,
           personalization,
           discountAmount,
-          paymentStatus: isQuote
-            ? toPrismaSalePaymentStatus("unpaid")
-            : input.paymentStatus
-              ? this.normalizePaymentStatus(input.paymentStatus)
-              : existing.paymentStatus,
+          paymentStatus: nextPaymentStatus,
+          paymentChannel,
           notes: input.notes?.trim() ?? "",
           items: {
             create: lines.map((line) => ({
@@ -459,11 +485,32 @@ export class SalesService {
       where: { id },
       data: {
         paymentStatus: this.normalizePaymentStatus(input.paymentStatus),
+        paymentChannel: this.resolvePaymentChannel(
+          input.paymentStatus,
+          input.paymentChannel,
+        ),
       },
       include: { items: true },
     });
 
     return mapSale(sale);
+  }
+
+  private resolvePaymentChannel(
+    status: SalePaymentStatus,
+    channel?: PaymentChannel,
+    fallback?: PaymentChannel,
+  ) {
+    if (status !== "paid") {
+      return null;
+    }
+    const resolved = channel ?? fallback;
+    if (!resolved) {
+      throw new BadRequestException(
+        "Précise le moyen de paiement (Cash, OM ou Wave) pour une vente payée.",
+      );
+    }
+    return toPrismaPaymentChannel(resolved);
   }
 
   private normalizePaymentStatus(

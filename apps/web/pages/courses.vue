@@ -5,7 +5,7 @@ import type {
   DeliveryRun,
   DeliveryRunLine,
 } from "@yowell/shared";
-import { deliveryRemainingCounts, formatCfa } from "@yowell/shared";
+import { deliveryRemainingCounts, formatCfa, paymentChannelLabel } from "@yowell/shared";
 
 const { data, pending, refresh } = await useApiFetch<DeliveriesOverview>(
   useApiUrl("/deliveries/overview"),
@@ -281,6 +281,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                 <span class="accordion__meta">
                   {{ run.items.length }} ligne{{ run.items.length > 1 ? "s" : "" }}
                   · {{ remainingSummary(run.items) }}
+                  · {{ paymentChannelLabel(run.paymentChannel) }}
                 </span>
               </span>
               <strong class="accordion__total">{{ formatCfa(run.totalAmount) }}</strong>
@@ -289,7 +290,8 @@ function isEditing(runId: string, item: DeliveryRunLine) {
 
             <div class="accordion__body">
               <p class="remaining-intro">
-                Après la production : indique s'il reste quelque chose et précise quoi.
+                Paiement : <strong>{{ paymentChannelLabel(run.paymentChannel) }}</strong>
+                — après la production, indique s'il reste quelque chose et précise quoi.
               </p>
               <div class="table-wrap">
                 <table class="table">

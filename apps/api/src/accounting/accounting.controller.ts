@@ -3,6 +3,7 @@ import type {
   CreateManualAccountingEntryInput,
   ManualAccountingEntry,
   UpdateCaisseInput,
+  UpdateChannelBalancesInput,
 } from "@yowell/shared";
 
 import { AccountingService } from "./accounting.service";
@@ -31,5 +32,10 @@ export class AccountingController {
   @Patch("caisse")
   async updateCaisse(@Body() body: UpdateCaisseInput) {
     return { caisse: await this.accountingService.updateCaisse(body) };
+  }
+
+  @Patch("balances")
+  updateChannelBalances(@Body() body: UpdateChannelBalancesInput) {
+    return this.accountingService.updateChannelBalances(body);
   }
 }

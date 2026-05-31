@@ -186,6 +186,34 @@ export type CreateProductionInput = {
 /** Comptabilité — entrées / sorties */
 export const DEFAULT_CAISSE_AMOUNT = 19_350;
 
+/** Canaux de paiement (encaissements et dépenses) */
+export type PaymentChannel = "cash" | "om" | "wave";
+
+export const PAYMENT_CHANNEL_OPTIONS: {
+  value: PaymentChannel;
+  label: string;
+}[] = [
+  { value: "cash", label: "Cash" },
+  { value: "om", label: "Orange Money" },
+  { value: "wave", label: "Wave" },
+];
+
+export function paymentChannelLabel(
+  channel: PaymentChannel | undefined | null,
+): string {
+  if (!channel) return "—";
+  return (
+    PAYMENT_CHANNEL_OPTIONS.find((option) => option.value === channel)?.label ??
+    channel
+  );
+}
+
+export type ChannelBalances = {
+  cash: number;
+  om: number;
+  wave: number;
+};
+
 export type AccountingEntrySource = "manual" | "sale" | "delivery" | "caisse";
 
 export type AccountingEntry = {
@@ -197,6 +225,7 @@ export type AccountingEntry = {
   source: AccountingEntrySource;
   /** ID vente, course ou écriture manuelle */
   sourceId?: string;
+  paymentChannel?: PaymentChannel;
 };
 
 export type ManualAccountingEntry = {
@@ -219,10 +248,20 @@ export type UpdateCaisseInput = {
   amount: number;
 };
 
+export type UpdateChannelBalancesInput = {
+  cash: number;
+  om: number;
+  wave: number;
+};
+
 export type AccountingOverview = {
-  /** Argent déjà en caisse au démarrage du suivi */
+  /** Solde d'ouverture cash (caisse physique) */
   caisse: number;
-  /** Caisse + revenus − dépenses */
+  /** Soldes d'ouverture OM et Wave */
+  openingBalances: ChannelBalances;
+  /** Solde actuel par canal (ouverture + ventes payées − courses) */
+  channelBalances: ChannelBalances;
+  /** Caisse + revenus − dépenses (tous canaux + manuels) */
   balance: number;
   /** Revenus du mois (ventes + manuels, hors caisse) */
   incomeMonth: number;
@@ -262,6 +301,7 @@ export type DeliveryRun = {
   items: DeliveryRunLine[];
   fees: DeliveryRunFee[];
   totalAmount: number;
+  paymentChannel: PaymentChannel;
   createdAt: string;
 };
 
@@ -300,6 +340,7 @@ export type CreateDeliveryRunInput = {
   date: string;
   items: CreateDeliveryRunLineInput[];
   fees?: CreateDeliveryRunFeeInput[];
+  paymentChannel: PaymentChannel;
 };
 
 export type UpdateDeliveryItemRemainingInput = {
@@ -411,6 +452,7 @@ export type Sale = {
   /** Remise appliquée sur le total (FCFA) */
   discountAmount: number;
   paymentStatus: SalePaymentStatus;
+  paymentChannel?: PaymentChannel;
   kind: SaleKind;
   notes: string;
   createdAt: string;
@@ -437,12 +479,14 @@ export type CreateSaleInput = {
   personalization?: boolean;
   discountAmount?: number;
   paymentStatus?: SalePaymentStatus;
+  paymentChannel?: PaymentChannel;
   kind?: SaleKind;
   notes?: string;
 };
 
 export type UpdateSalePaymentInput = {
   paymentStatus: SalePaymentStatus;
+  paymentChannel?: PaymentChannel;
 };
 
 export type UpdateSaleInput = {
@@ -453,6 +497,7 @@ export type UpdateSaleInput = {
   discountAmount?: number;
   notes?: string;
   paymentStatus?: SalePaymentStatus;
+  paymentChannel?: PaymentChannel;
 };
 
 export function saleTotal(items: SaleLineItem[]): number {

@@ -4,6 +4,7 @@ import {
   SALE_PERSONALIZATION_FEE,
   computeSaleTotalAmount,
   formatCfa,
+  PAYMENT_CHANNEL_OPTIONS,
   saleBottleCount,
 } from "@yowell/shared";
 
@@ -28,6 +29,9 @@ const clientId = ref(props.sale.clientId);
 const orderedAt = ref(props.sale.orderedAt.slice(0, 10));
 const notes = ref(props.sale.notes);
 const paymentStatus = ref(props.sale.paymentStatus);
+const paymentChannel = ref<"cash" | "om" | "wave">(
+  props.sale.paymentChannel ?? "cash",
+);
 const personalization = ref(props.sale.personalization);
 const discountAmount = ref<number | "">(props.sale.discountAmount || "");
 const lines = ref<OrderLine[]>(
@@ -172,6 +176,9 @@ async function submit() {
         discountAmount: discountAmount.value === "" ? 0 : Number(discountAmount.value),
         notes: notes.value.trim(),
         paymentStatus: paymentStatus.value,
+        ...(paymentStatus.value === "paid"
+          ? { paymentChannel: paymentChannel.value }
+          : {}),
       },
     });
     success.value = isQuote.value ? "Devis modifié." : "Vente modifiée.";
@@ -205,6 +212,18 @@ async function submit() {
         <select id="edit-sale-payment" v-model="paymentStatus">
           <option value="unpaid">Non payé</option>
           <option value="paid">Payé</option>
+        </select>
+      </div>
+      <div v-if="!isQuote && paymentStatus === 'paid'" class="form-field">
+        <label for="edit-sale-channel">Moyen de paiement</label>
+        <select id="edit-sale-channel" v-model="paymentChannel">
+          <option
+            v-for="option in PAYMENT_CHANNEL_OPTIONS"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
         </select>
       </div>
     </div>

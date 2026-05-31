@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DeliveryRun } from "@yowell/shared";
-import { formatCfa } from "@yowell/shared";
+import { formatCfa, PAYMENT_CHANNEL_OPTIONS } from "@yowell/shared";
 
 const props = defineProps<{
   run: DeliveryRun;
@@ -23,6 +23,7 @@ type FeeDraft = {
 };
 
 const date = ref(props.run.date.slice(0, 10));
+const paymentChannel = ref(props.run.paymentChannel);
 const lines = ref<LineDraft[]>(
   props.run.items.map((item) => ({
     label: item.label,
@@ -104,6 +105,7 @@ async function submit() {
           label: f.label.trim(),
           amount: Number(f.amount),
         })),
+        paymentChannel: paymentChannel.value,
       },
     });
     success.value = "Course modifiée.";
@@ -118,9 +120,23 @@ async function submit() {
 
 <template>
   <form @submit.prevent="submit">
-    <div class="form-field" style="max-width: 220px; margin-bottom: 1.25rem">
-      <label for="edit-run-date">Date de la course *</label>
-      <input id="edit-run-date" v-model="date" type="date" required />
+    <div class="form-grid" style="max-width: 520px; margin-bottom: 1.25rem">
+      <div class="form-field">
+        <label for="edit-run-date">Date de la course *</label>
+        <input id="edit-run-date" v-model="date" type="date" required />
+      </div>
+      <div class="form-field">
+        <label for="edit-run-payment">Moyen de paiement *</label>
+        <select id="edit-run-payment" v-model="paymentChannel" required>
+          <option
+            v-for="option in PAYMENT_CHANNEL_OPTIONS"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <fieldset class="order-lines">

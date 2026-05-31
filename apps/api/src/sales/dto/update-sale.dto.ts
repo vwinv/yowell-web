@@ -69,4 +69,8 @@ export class UpdateSaleDto {
   @IsOptional()
   @IsIn(["paid", "unpaid"])
   paymentStatus?: "paid" | "unpaid";
+
+  @IsOptional()
+  @IsIn(["cash", "om", "wave"])
+  paymentChannel?: "cash" | "om" | "wave";
 }

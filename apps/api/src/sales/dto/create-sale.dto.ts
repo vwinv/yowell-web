@@ -71,6 +71,10 @@ export class CreateSaleDto {
   paymentStatus?: "paid" | "unpaid";
 
   @IsOptional()
+  @IsIn(["cash", "om", "wave"])
+  paymentChannel?: "cash" | "om" | "wave";
+
+  @IsOptional()
   @IsIn(["sale", "quote"])
   kind?: "sale" | "quote";
 }

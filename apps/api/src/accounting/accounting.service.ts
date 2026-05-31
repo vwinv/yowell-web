@@ -4,13 +4,17 @@ import {
   NotFoundException,
   OnModuleInit,
 } from "@nestjs/common";
-import { DEFAULT_CAISSE_AMOUNT } from "@yowell/shared";
+import {
+  DEFAULT_CAISSE_AMOUNT,
+  type ChannelBalances,
+} from "@yowell/shared";
 import type {
   AccountingEntry,
   AccountingOverview,
   CreateManualAccountingEntryInput,
   ManualAccountingEntry,
   UpdateCaisseInput,
+  UpdateChannelBalancesInput,
 } from "@yowell/shared";
 
 import { DeliveriesService } from "../deliveries/deliveries.service";
@@ -37,7 +41,12 @@ export class AccountingService implements OnModuleInit {
     const state = await this.prisma.accountingState.upsert({
       where: { id: "default" },
       update: {},
-      create: { id: "default", caisse: DEFAULT_CAISSE_AMOUNT },
+      create: {
+        id: "default",
+        caisse: DEFAULT_CAISSE_AMOUNT,
+        om: 0,
+        wave: 0,
+      },
     });
 
     if (state.caisse === 25_865) {
@@ -51,8 +60,14 @@ export class AccountingService implements OnModuleInit {
   }
 
   async getOverview(): Promise<AccountingOverview> {
-    const caisse = await this.getCaisse();
-    const entries = await this.buildLedger(caisse);
+    const state = await this.ensureState();
+    const openingBalances: ChannelBalances = {
+      cash: state.caisse,
+      om: state.om,
+      wave: state.wave,
+    };
+    const channelBalances = await this.computeChannelBalances(openingBalances);
+    const entries = await this.buildLedger(openingBalances);
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
@@ -81,11 +96,17 @@ export class AccountingService implements OnModuleInit {
       }
     }
 
-    const incomeTotal = caisse + incomeFromOperations;
-    const balance = caisse + operationsBalance;
+    const incomeTotal = openingBalances.cash + incomeFromOperations;
+    const balance =
+      openingBalances.cash +
+      openingBalances.om +
+      openingBalances.wave +
+      operationsBalance;
 
     return {
-      caisse,
+      caisse: openingBalances.cash,
+      openingBalances,
+      channelBalances,
       balance,
       incomeMonth,
       expenseMonth,
@@ -121,10 +142,49 @@ export class AccountingService implements OnModuleInit {
       create: {
         id: "default",
         caisse: Math.round(input.amount),
+        om: 0,
+        wave: 0,
       },
     });
 
     return state.caisse;
+  }
+
+  async updateChannelBalances(
+    input: UpdateChannelBalancesInput,
+  ): Promise<ChannelBalances> {
+    for (const [label, amount] of [
+      ["cash", input.cash],
+      ["om", input.om],
+      ["wave", input.wave],
+    ] as const) {
+      if (amount < 0) {
+        throw new BadRequestException(
+          `Le solde d'ouverture ${label} ne peut pas être négatif.`,
+        );
+      }
+    }
+
+    const state = await this.prisma.accountingState.upsert({
+      where: { id: "default" },
+      update: {
+        caisse: Math.round(input.cash),
+        om: Math.round(input.om),
+        wave: Math.round(input.wave),
+      },
+      create: {
+        id: "default",
+        caisse: Math.round(input.cash),
+        om: Math.round(input.om),
+        wave: Math.round(input.wave),
+      },
+    });
+
+    return {
+      cash: state.caisse,
+      om: state.om,
+      wave: state.wave,
+    };
   }
 
   async createManual(
@@ -166,7 +226,29 @@ export class AccountingService implements OnModuleInit {
     });
   }
 
-  private async buildLedger(caisse: number): Promise<AccountingEntry[]> {
+  private async computeChannelBalances(
+    opening: ChannelBalances,
+  ): Promise<ChannelBalances> {
+    const balances: ChannelBalances = { ...opening };
+    const [sales, deliveries] = await Promise.all([
+      this.salesService.listAll(),
+      this.deliveriesService.listAll(),
+    ]);
+
+    for (const sale of sales) {
+      if (sale.kind === "quote" || sale.paymentStatus !== "paid") continue;
+      if (!sale.paymentChannel) continue;
+      balances[sale.paymentChannel] += sale.totalAmount;
+    }
+
+    for (const run of deliveries) {
+      balances[run.paymentChannel] -= run.totalAmount;
+    }
+
+    return balances;
+  }
+
+  private async buildLedger(opening: ChannelBalances): Promise<AccountingEntry[]> {
     const entries: AccountingEntry[] = [];
     const [sales, deliveries, manualEntries] = await Promise.all([
       this.salesService.listAll(),
@@ -175,13 +257,36 @@ export class AccountingService implements OnModuleInit {
     ]);
 
     entries.push({
-      id: "caisse-opening",
+      id: "opening-cash",
       date: "1970-01-01T00:00:00.000Z",
-      label: "Solde caisse (état actuel)",
-      amount: caisse,
+      label: "Solde d'ouverture — Cash",
+      amount: opening.cash,
       type: "income",
       source: "caisse",
+      paymentChannel: "cash",
     });
+    if (opening.om > 0) {
+      entries.push({
+        id: "opening-om",
+        date: "1970-01-01T00:00:00.000Z",
+        label: "Solde d'ouverture — Orange Money",
+        amount: opening.om,
+        type: "income",
+        source: "caisse",
+        paymentChannel: "om",
+      });
+    }
+    if (opening.wave > 0) {
+      entries.push({
+        id: "opening-wave",
+        date: "1970-01-01T00:00:00.000Z",
+        label: "Solde d'ouverture — Wave",
+        amount: opening.wave,
+        type: "income",
+        source: "caisse",
+        paymentChannel: "wave",
+      });
+    }
 
     for (const sale of sales) {
       if (sale.kind === "quote" || sale.paymentStatus !== "paid") continue;
@@ -193,6 +298,7 @@ export class AccountingService implements OnModuleInit {
         type: "income",
         source: "sale",
         sourceId: sale.id,
+        paymentChannel: sale.paymentChannel,
       });
     }
 
@@ -210,6 +316,7 @@ export class AccountingService implements OnModuleInit {
         type: "expense",
         source: "delivery",
         sourceId: run.id,
+        paymentChannel: run.paymentChannel,
       });
     }
 

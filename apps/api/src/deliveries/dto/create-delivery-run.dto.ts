@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsDateString,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -50,4 +51,7 @@ export class CreateDeliveryRunDto {
   @ValidateNested({ each: true })
   @Type(() => CreateDeliveryRunFeeDto)
   fees?: CreateDeliveryRunFeeDto[];
+
+  @IsIn(["cash", "om", "wave"])
+  paymentChannel!: "cash" | "om" | "wave";
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AccountingEntry, AccountingOverview } from "@yowell/shared";
-import { formatCfa } from "@yowell/shared";
+import { formatCfa, paymentChannelLabel } from "@yowell/shared";
 
 const { data, pending, refresh } = await useApiFetch<AccountingOverview>(
   useApiUrl("/accounting/overview"),
@@ -47,25 +47,32 @@ function sourceLabel(source: AccountingEntry["source"]) {
 }
 
 const showCaisseForm = ref(false);
-const caisseAmount = ref<number | "">("");
+const cashOpening = ref<number | "">("");
+const omOpening = ref<number | "">("");
+const waveOpening = ref<number | "">("");
 const savingCaisse = ref(false);
 
 watch(
-  () => data.value?.caisse,
-  (value) => {
-    if (value !== undefined) caisseAmount.value = value;
+  () => data.value?.openingBalances,
+  (balances) => {
+    if (!balances) return;
+    cashOpening.value = balances.cash;
+    omOpening.value = balances.om;
+    waveOpening.value = balances.wave;
   },
   { immediate: true },
 );
 
-async function saveCaisse() {
-  const parsed = Number(caisseAmount.value);
-  if (parsed < 0 || Number.isNaN(parsed)) return;
+async function saveChannelBalances() {
+  const cash = Number(cashOpening.value);
+  const om = Number(omOpening.value);
+  const wave = Number(waveOpening.value);
+  if ([cash, om, wave].some((value) => value < 0 || Number.isNaN(value))) return;
   savingCaisse.value = true;
   try {
-    await apiFetch(useApiUrl("/accounting/caisse"), {
+    await apiFetch(useApiUrl("/accounting/balances"), {
       method: "PATCH",
-      body: { amount: parsed },
+      body: { cash, om, wave },
     });
     showCaisseForm.value = false;
     await refresh();
@@ -88,7 +95,7 @@ async function removeManual(entry: AccountingEntry) {
   <div>
     <PageHeader
       title="Comptabilité"
-      description="Seules les ventes marquées payées comptent en revenu, avec la caisse et les saisies manuelles."
+      description="Suivi par canal Cash, Orange Money et Wave — ventes payées et courses."
     />
 
     <p v-if="pending" class="loading">Chargement de la comptabilité</p>
@@ -96,28 +103,34 @@ async function removeManual(entry: AccountingEntry) {
     <template v-else>
       <div class="stats-grid stats-grid--4">
         <StatCard
-          label="Caisse"
-          :value="formatCfa(data?.caisse ?? 0)"
-          icon="🏦"
+          label="Cash"
+          :value="formatCfa(data?.channelBalances?.cash ?? 0)"
+          icon="💵"
           tone="green"
         />
         <StatCard
-          label="Revenus (total)"
-          :value="formatCfa(data?.incomeTotal ?? 0)"
-          icon="↑"
+          label="Orange Money"
+          :value="formatCfa(data?.channelBalances?.om ?? 0)"
+          icon="📱"
+          tone="orange"
+        />
+        <StatCard
+          label="Wave"
+          :value="formatCfa(data?.channelBalances?.wave ?? 0)"
+          icon="🌊"
           tone="blue"
+        />
+        <StatCard
+          label="Solde global"
+          :value="formatAmount(data?.balance ?? 0)"
+          icon="💰"
+          :tone="(data?.balance ?? 0) >= 0 ? 'green' : 'orange'"
         />
         <StatCard
           label="Revenus (mois)"
           :value="formatCfa(data?.incomeMonth ?? 0)"
           icon="📈"
           tone="blue"
-        />
-        <StatCard
-          label="Solde"
-          :value="formatAmount(data?.balance ?? 0)"
-          icon="💰"
-          :tone="(data?.balance ?? 0) >= 0 ? 'green' : 'orange'"
         />
         <StatCard
           label="Dépenses (mois)"
@@ -128,10 +141,9 @@ async function removeManual(entry: AccountingEntry) {
       </div>
 
       <p class="accounting-hint">
-        Les <strong>revenus</strong> incluent la caisse
-        ({{ formatCfa(data?.caisse ?? 0) }}), les <strong>ventes payées</strong>
-        et les saisies manuelles. Une vente n'apparaît qu'après « Marquer payé » sur la page Ventes.
-        Les <strong>dépenses</strong> viennent des courses (+ saisies manuelles).
+        Les soldes par canal = solde d'ouverture + ventes payées sur ce canal − courses payées sur ce canal.
+        Les saisies manuelles impactent le <strong>solde global</strong> uniquement.
+        Une vente n'apparaît qu'après « Marquer payé » avec le canal choisi sur la page Ventes.
       </p>
 
       <div class="stock-actions">
@@ -140,25 +152,50 @@ async function removeManual(entry: AccountingEntry) {
           class="btn btn--secondary"
           @click="showCaisseForm = !showCaisseForm"
         >
-          {{ showCaisseForm ? "Annuler" : "Mettre à jour la caisse" }}
+          {{ showCaisseForm ? "Annuler" : "Mettre à jour les soldes d'ouverture" }}
         </button>
       </div>
 
       <section v-if="showCaisseForm" class="panel collapsible-panel">
-        <h2 class="panel__title">État actuel de la caisse</h2>
-        <form class="form-grid form-grid--inline" @submit.prevent="saveCaisse">
+        <h2 class="panel__title">Soldes d'ouverture par canal</h2>
+        <p class="panel__hint" style="margin-bottom: 1rem">
+          Montants déjà disponibles au démarrage du suivi (avant les opérations enregistrées).
+        </p>
+        <form class="form-grid" @submit.prevent="saveChannelBalances">
           <div class="form-field">
-            <label for="caisse-amount">Montant en caisse (FCFA)</label>
+            <label for="opening-cash">Cash (FCFA)</label>
             <input
-              id="caisse-amount"
-              v-model="caisseAmount"
+              id="opening-cash"
+              v-model.number="cashOpening"
               type="number"
               min="0"
               step="1"
               required
             />
           </div>
-          <div class="form-actions">
+          <div class="form-field">
+            <label for="opening-om">Orange Money (FCFA)</label>
+            <input
+              id="opening-om"
+              v-model.number="omOpening"
+              type="number"
+              min="0"
+              step="1"
+              required
+            />
+          </div>
+          <div class="form-field">
+            <label for="opening-wave">Wave (FCFA)</label>
+            <input
+              id="opening-wave"
+              v-model.number="waveOpening"
+              type="number"
+              min="0"
+              step="1"
+              required
+            />
+          </div>
+          <div class="form-actions form-field--wide">
             <button type="submit" class="btn btn--primary" :disabled="savingCaisse">
               {{ savingCaisse ? "Enregistrement…" : "Enregistrer" }}
             </button>
@@ -190,6 +227,7 @@ async function removeManual(entry: AccountingEntry) {
                 <th>Date</th>
                 <th>Libellé</th>
                 <th>Origine</th>
+                <th>Canal</th>
                 <th>Type</th>
                 <th>Montant</th>
                 <th />
@@ -207,6 +245,7 @@ async function removeManual(entry: AccountingEntry) {
                     {{ sourceLabel(entry.source) }}
                   </span>
                 </td>
+                <td>{{ entry.paymentChannel ? paymentChannelLabel(entry.paymentChannel) : "—" }}</td>
                 <td>
                   <span
                     class="badge"

@@ -6,7 +6,7 @@ import type {
 } from "@yowell/shared";
 import { buildDeliveryRemainingItems } from "@yowell/shared";
 
-import { mapDeliveryRun } from "../prisma/prisma.mappers";
+import { mapDeliveryRun, toPrismaPaymentChannel } from "../prisma/prisma.mappers";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -72,6 +72,7 @@ export class DeliveriesService {
         totalAmount:
           items.reduce((sum, item) => sum + item.lineTotal, 0) +
           fees.reduce((sum, fee) => sum + fee.amount, 0),
+        paymentChannel: toPrismaPaymentChannel(input.paymentChannel),
         items: {
           create: items,
         },
@@ -124,6 +125,7 @@ export class DeliveriesService {
         data: {
           date: new Date(input.date),
           totalAmount,
+          paymentChannel: toPrismaPaymentChannel(input.paymentChannel),
         },
       });
 

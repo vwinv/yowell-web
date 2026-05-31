@@ -26,6 +26,12 @@ enum SaleKind {
   QUOTE
 }
 
+enum PaymentChannel {
+  CASH
+  OM
+  WAVE
+}
+
 enum AccountingEntryType {
   INCOME
   EXPENSE
@@ -88,6 +94,7 @@ model Sale {
   personalization  Boolean           @default(false)
   discountAmount   Int                 @default(0)
   paymentStatus    SalePaymentStatus   @default(UNPAID)
+  paymentChannel   PaymentChannel?
   kind             SaleKind            @default(SALE)
   notes            String              @default("")
   createdAt     DateTime          @default(now())
@@ -97,6 +104,7 @@ model Sale {
   @@index([clientId])
   @@index([orderedAt])
   @@index([paymentStatus])
+  @@index([paymentChannel])
   @@index([kind])
   @@index([createdAt])
 }
@@ -180,6 +188,8 @@ model ProductionRecord {
 model AccountingState {
   id        String   @id @default("default")
   caisse    Int      @default(19350)
+  om        Int      @default(0)
+  wave      Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -198,15 +208,17 @@ model ManualAccountingEntry {
 }
 
 model DeliveryRun {
-  id          String            @id @default(uuid())
-  date        DateTime
-  totalAmount Int
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  items       DeliveryRunItem[]
-  fees        DeliveryRunFee[]
+  id              String            @id @default(uuid())
+  date            DateTime
+  totalAmount     Int
+  paymentChannel  PaymentChannel    @default(CASH)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  items           DeliveryRunItem[]
+  fees            DeliveryRunFee[]
 
   @@index([date])
+  @@index([paymentChannel])
   @@index([createdAt])
 }
 
