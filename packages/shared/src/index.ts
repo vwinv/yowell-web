@@ -183,6 +183,9 @@ export type CreateProductionInput = {
   notes?: string;
 };
 
+/** Même champs que la création — ajuste le stock en conséquence. */
+export type UpdateProductionInput = CreateProductionInput;
+
 /** Comptabilité — entrées / sorties */
 export const DEFAULT_CAISSE_AMOUNT = 19_350;
 

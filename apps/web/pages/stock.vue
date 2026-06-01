@@ -4,7 +4,9 @@ import type {
   JuiceFormat,
   JuiceProduct,
   JuiceVolume,
+  ProductionRecord,
   StockOverview,
+  UpdateProductionInput,
 } from "@yowell/shared";
 import { formatCfa, productTotalStock } from "@yowell/shared";
 
@@ -24,6 +26,19 @@ const productionForm = reactive<CreateProductionInput>({
 const productionSubmitting = ref(false);
 const productionError = ref("");
 const productionSuccess = ref("");
+
+const editingProductionId = ref<string | null>(null);
+const editProductionForm = reactive<UpdateProductionInput>({
+  productId: "",
+  volume: "1L",
+  quantity: 1,
+  producedAt: new Date().toISOString().slice(0, 10),
+  notes: "",
+});
+const editProductionSubmitting = ref(false);
+const editProductionError = ref("");
+const editProductionSuccess = ref("");
+const deletingProductionId = ref<string | null>(null);
 
 const showProductForm = ref(false);
 const showProductionForm = ref(false);
@@ -63,7 +78,28 @@ function openProductForm() {
 function openProductionForm() {
   showProductForm.value = false;
   editingProductId.value = null;
+  editingProductionId.value = null;
   showProductionForm.value = true;
+}
+
+function startEditProduction(prod: ProductionRecord) {
+  editProductionForm.productId = prod.productId;
+  editProductionForm.volume = prod.volume;
+  editProductionForm.quantity = prod.quantity;
+  editProductionForm.producedAt = prod.producedAt.slice(0, 10);
+  editProductionForm.notes = prod.notes;
+  editProductionError.value = "";
+  editProductionSuccess.value = "";
+  showProductForm.value = false;
+  showProductionForm.value = false;
+  editingProductId.value = null;
+  editingProductionId.value = prod.id;
+}
+
+function cancelEditProduction() {
+  editingProductionId.value = null;
+  editProductionError.value = "";
+  editProductionSuccess.value = "";
 }
 
 function onProductSuccess() {
@@ -221,6 +257,14 @@ const enabledFormats = computed((): JuiceFormat[] =>
   selectedProduct.value?.formats.filter((f) => f.enabled) ?? [],
 );
 
+const editSelectedProduct = computed(() =>
+  data.value?.products.find((p) => p.id === editProductionForm.productId),
+);
+
+const editEnabledFormats = computed((): JuiceFormat[] =>
+  editSelectedProduct.value?.formats.filter((f) => f.enabled) ?? [],
+);
+
 watch(
   () => data.value?.products,
   (products) => {
@@ -242,17 +286,29 @@ watch(
   },
 );
 
+watch(
+  () => editProductionForm.productId,
+  () => {
+    if (editSelectedProduct.value) {
+      syncProductionVolume(editSelectedProduct.value, editProductionForm);
+    }
+  },
+);
+
 onUnmounted(() => {
   for (const url of editPhotoPreviews.value) {
     URL.revokeObjectURL(url);
   }
 });
 
-function syncProductionVolume(product: JuiceProduct) {
+function syncProductionVolume(
+  product: JuiceProduct,
+  form: { volume: JuiceVolume } = productionForm,
+) {
   const formats = product.formats.filter((f) => f.enabled);
-  const first = formats[0];
-  if (first) {
-    productionForm.volume = first.volume;
+  const current = formats.find((f) => f.volume === form.volume);
+  if (!current && formats[0]) {
+    form.volume = formats[0].volume;
   }
 }
 
@@ -304,6 +360,75 @@ async function removeProduct(id: string, name: string) {
   if (!confirm(`Supprimer « ${name} » ?`)) return;
   await apiFetch(useApiUrl(`/stock/products/${id}`), { method: "DELETE" });
   await refresh();
+}
+
+async function submitEditProduction() {
+  editProductionError.value = "";
+  editProductionSuccess.value = "";
+
+  if (!editingProductionId.value) return;
+  if (!editProductionForm.productId) {
+    editProductionError.value = "Choisis un produit.";
+    return;
+  }
+  if (!editEnabledFormats.value.length) {
+    editProductionError.value = "Ce produit n'a aucun format actif.";
+    return;
+  }
+  if (editProductionForm.quantity < 1) {
+    editProductionError.value = "La quantité doit être au moins 1.";
+    return;
+  }
+
+  editProductionSubmitting.value = true;
+  try {
+    await apiFetch(
+      useApiUrl(`/stock/productions/${editingProductionId.value}`),
+      {
+        method: "PATCH",
+        body: {
+          productId: editProductionForm.productId,
+          volume: editProductionForm.volume,
+          quantity: editProductionForm.quantity,
+          producedAt: editProductionForm.producedAt,
+          notes: editProductionForm.notes,
+        },
+      },
+    );
+    editProductionSuccess.value = "Production modifiée — stock mis à jour.";
+    await refresh();
+    editingProductionId.value = null;
+  } catch {
+    editProductionError.value =
+      "Impossible de modifier cette production. Le stock actuel est peut-être insuffisant pour appliquer la correction.";
+  } finally {
+    editProductionSubmitting.value = false;
+  }
+}
+
+async function cancelProductionRecord(prod: ProductionRecord) {
+  const label = `${prod.quantity} × ${prod.productName} (${prod.volume})`;
+  if (
+    !confirm(
+      `Annuler cette production ?\n\n${label}\n\nLe stock sera diminué de ${prod.quantity} unité(s).`,
+    )
+  ) {
+    return;
+  }
+
+  deletingProductionId.value = prod.id;
+  try {
+    await apiFetch(useApiUrl(`/stock/productions/${prod.id}`), {
+      method: "DELETE",
+    });
+    await refresh();
+  } catch {
+    alert(
+      "Impossible d'annuler cette production. Le stock actuel est peut-être insuffisant (des ventes ont déjà consommé des unités).",
+    );
+  } finally {
+    deletingProductionId.value = null;
+  }
 }
 </script>
 
@@ -506,6 +631,94 @@ async function removeProduct(id: string, name: string) {
         </form>
         <p v-if="editError" class="form-error">{{ editError }}</p>
         <p v-if="editSuccess" class="form-success">{{ editSuccess }}</p>
+      </AppModal>
+
+      <AppModal
+        :open="!!editingProductionId"
+        title="Modifier une production"
+        @close="cancelEditProduction"
+      >
+        <form class="form-grid" @submit.prevent="submitEditProduction">
+          <div class="form-field form-field--wide">
+            <label for="edit-production-product">Produit</label>
+            <select
+              id="edit-production-product"
+              v-model="editProductionForm.productId"
+              :disabled="!data?.products.length"
+            >
+              <option
+                v-for="p in data?.products"
+                :key="p.id"
+                :value="p.id"
+              >
+                {{ p.name }} ({{ productTotalStock(p) }} unités au total)
+              </option>
+            </select>
+          </div>
+          <div class="form-field form-field--wide">
+            <label for="edit-production-volume">Format produit</label>
+            <select
+              id="edit-production-volume"
+              v-model="editProductionForm.volume"
+              :disabled="!editEnabledFormats.length"
+            >
+              <option
+                v-for="f in editEnabledFormats"
+                :key="f.volume"
+                :value="f.volume"
+              >
+                {{ f.volume }} — stock : {{ f.quantity }} — {{ formatCfa(f.price) }}
+              </option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="edit-production-qty">Quantité produite</label>
+            <input
+              id="edit-production-qty"
+              v-model.number="editProductionForm.quantity"
+              type="number"
+              min="1"
+              required
+            />
+          </div>
+          <div class="form-field">
+            <label for="edit-production-date">Date</label>
+            <input
+              id="edit-production-date"
+              v-model="editProductionForm.producedAt"
+              type="date"
+              required
+            />
+          </div>
+          <div class="form-field form-field--wide">
+            <label for="edit-production-notes">Notes (optionnel)</label>
+            <input
+              id="edit-production-notes"
+              v-model="editProductionForm.notes"
+              type="text"
+              placeholder="Ex. lot du matin, recette test…"
+            />
+          </div>
+          <div class="form-field form-actions">
+            <button
+              type="submit"
+              class="btn btn--primary"
+              :disabled="editProductionSubmitting || !data?.products.length"
+            >
+              {{ editProductionSubmitting ? "Mise à jour…" : "Enregistrer les modifications" }}
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost"
+              :disabled="editProductionSubmitting"
+              @click="cancelEditProduction"
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
+        <p v-if="editProductionError" class="form-error">{{ editProductionError }}</p>
+        <p v-if="editProductionSuccess" class="form-success">{{ editProductionSuccess }}</p>
       </AppModal>
 
       <AppModal
@@ -869,6 +1082,7 @@ async function removeProduct(id: string, name: string) {
                 <th>Format</th>
                 <th>Quantité</th>
                 <th>Notes</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -888,6 +1102,23 @@ async function removeProduct(id: string, name: string) {
                 </td>
                 <td>+{{ prod.quantity }}</td>
                 <td>{{ prod.notes || "—" }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    @click="startEditProduction(prod)"
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    :disabled="deletingProductionId === prod.id"
+                    @click="cancelProductionRecord(prod)"
+                  >
+                    {{ deletingProductionId === prod.id ? "Annulation…" : "Annuler" }}
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>

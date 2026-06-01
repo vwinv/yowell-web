@@ -13,6 +13,7 @@ import { FilesInterceptor } from "@nestjs/platform-express";
 
 import { CreateProductDto } from "./dto/create-product.dto";
 import { CreateProductionDto } from "./dto/create-production.dto";
+import { UpdateProductionDto } from "./dto/update-production.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
 import { photoFilter, productPhotosStorage, toPublicPhotoPath } from "./stock-upload";
 import { StockService } from "./stock.service";
@@ -80,5 +81,19 @@ export class StockController {
   @Post("productions")
   recordProduction(@Body() dto: CreateProductionDto) {
     return this.stockService.recordProduction(dto);
+  }
+
+  @Patch("productions/:id")
+  updateProduction(
+    @Param("id") id: string,
+    @Body() dto: UpdateProductionDto,
+  ) {
+    return this.stockService.updateProduction(id, dto);
+  }
+
+  @Delete("productions/:id")
+  async deleteProduction(@Param("id") id: string) {
+    await this.stockService.deleteProduction(id);
+    return { ok: true };
   }
 }

@@ -11,12 +11,14 @@ import type {
   JuiceVolume,
   ProductionRecord,
   StockOverview,
+  UpdateProductionInput,
 } from "@yowell/shared";
 
 import {
   mapProduct,
   mapProductionRecord,
   toPrismaJuiceVolume,
+  toSharedJuiceVolume,
 } from "../prisma/prisma.mappers";
 import { PrismaService } from "../prisma/prisma.service";
 import { deletePhotoFiles } from "./stock-upload";
@@ -255,36 +257,22 @@ export class StockService {
 
   async recordProduction(input: CreateProductionInput): Promise<ProductionRecord> {
     return this.prisma.$transaction(async (tx) => {
-      const product = await tx.product.findUnique({
-        where: { id: input.productId },
-        include: { formats: true },
-      });
-      if (!product) {
-        throw new NotFoundException("Produit introuvable");
-      }
-
-      const format = product.formats.find(
-        (item) =>
-          item.volume === toPrismaJuiceVolume(input.volume) && item.enabled,
+      const product = await this.assertProductFormat(
+        input.productId,
+        input.volume,
+        tx,
       );
-      if (!format) {
-        throw new BadRequestException(
-          `Le format ${input.volume} n'est pas proposé pour ce produit.`,
-        );
-      }
 
       const producedAt = input.producedAt
         ? new Date(input.producedAt)
         : new Date();
 
-      await tx.productFormat.update({
-        where: { id: format.id },
-        data: {
-          quantity: {
-            increment: input.quantity,
-          },
-        },
-      });
+      await this.incrementStock(
+        input.productId,
+        input.volume,
+        input.quantity,
+        tx,
+      );
 
       const record = await tx.productionRecord.create({
         data: {
@@ -298,6 +286,142 @@ export class StockService {
       });
 
       return mapProductionRecord(record);
+    });
+  }
+
+  async updateProduction(
+    id: string,
+    input: UpdateProductionInput,
+  ): Promise<ProductionRecord> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.productionRecord.findUnique({ where: { id } });
+      if (!existing) {
+        throw new NotFoundException("Production introuvable");
+      }
+
+      const product = await this.assertProductFormat(
+        input.productId,
+        input.volume,
+        tx,
+      );
+
+      const volumeChanged =
+        existing.volume !== toPrismaJuiceVolume(input.volume);
+      const stockChanged =
+        existing.productId !== input.productId ||
+        volumeChanged ||
+        existing.quantity !== input.quantity;
+
+      if (stockChanged) {
+        await this.decrementStock(
+          existing.productId,
+          toSharedJuiceVolume(existing.volume),
+          existing.quantity,
+          tx,
+        );
+        await this.incrementStock(
+          input.productId,
+          input.volume,
+          input.quantity,
+          tx,
+        );
+      }
+
+      const producedAt = input.producedAt
+        ? new Date(input.producedAt)
+        : existing.producedAt;
+
+      const record = await tx.productionRecord.update({
+        where: { id },
+        data: {
+          productId: product.id,
+          productName: product.name,
+          volume: toPrismaJuiceVolume(input.volume),
+          quantity: input.quantity,
+          producedAt,
+          notes: input.notes?.trim() ?? "",
+        },
+      });
+
+      return mapProductionRecord(record);
+    });
+  }
+
+  async deleteProduction(id: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.productionRecord.findUnique({ where: { id } });
+      if (!existing) {
+        throw new NotFoundException("Production introuvable");
+      }
+
+      await this.decrementStock(
+        existing.productId,
+        toSharedJuiceVolume(existing.volume),
+        existing.quantity,
+        tx,
+      );
+
+      await tx.productionRecord.delete({ where: { id } });
+    });
+  }
+
+  private async assertProductFormat(
+    productId: string,
+    volume: JuiceVolume,
+    db: StockDbClient,
+  ) {
+    const product = await db.product.findUnique({
+      where: { id: productId },
+      include: { formats: true },
+    });
+    if (!product) {
+      throw new NotFoundException("Produit introuvable");
+    }
+
+    const format = product.formats.find(
+      (item) =>
+        item.volume === toPrismaJuiceVolume(volume) && item.enabled,
+    );
+    if (!format) {
+      throw new BadRequestException(
+        `Le format ${volume} n'est pas proposé pour ce produit.`,
+      );
+    }
+
+    return product;
+  }
+
+  private async incrementStock(
+    productId: string,
+    volume: JuiceVolume,
+    quantity: number,
+    db: StockDbClient = this.prisma,
+  ): Promise<void> {
+    const product = await db.product.findUnique({
+      where: { id: productId },
+      include: { formats: true },
+    });
+    if (!product) {
+      throw new NotFoundException("Produit introuvable");
+    }
+
+    const format = product.formats.find(
+      (item) =>
+        item.volume === toPrismaJuiceVolume(volume) && item.enabled,
+    );
+    if (!format) {
+      throw new BadRequestException(
+        `Le format ${volume} n'est pas proposé pour ce produit.`,
+      );
+    }
+
+    await db.productFormat.update({
+      where: { id: format.id },
+      data: {
+        quantity: {
+          increment: quantity,
+        },
+      },
     });
   }
 
@@ -337,7 +461,7 @@ export class StockService {
     });
     if (updated.count === 0) {
       throw new BadRequestException(
-        `Stock insuffisant pour ${product.name} (${volume}) : ${format.quantity} disponible(s).`,
+        `Stock insuffisant pour ${product.name} (${volume}) : ${format.quantity} disponible(s). Impossible d'annuler ou de réduire cette production — des ventes ont peut-être déjà consommé le stock.`,
       );
     }
   }

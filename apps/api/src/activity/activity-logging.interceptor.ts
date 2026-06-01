@@ -71,6 +71,12 @@ function humanSummary(method: string, path: string): string {
   if (method === "POST" && base === "/api/stock/productions") {
     return "Enregistrement d'une production";
   }
+  if (method === "PATCH" && base.startsWith("/api/stock/productions/")) {
+    return "Modification d'une production";
+  }
+  if (method === "DELETE" && base.startsWith("/api/stock/productions/")) {
+    return "Annulation d'une production";
+  }
 
   return `${method} ${base}`;
 }
