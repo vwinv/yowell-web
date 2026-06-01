@@ -29,6 +29,7 @@ export class UsersService implements OnModuleInit {
       where: { email },
       update: {
         name,
+        passwordHash,
         role: toPrismaUserRole("admin"),
         active: true,
       },

@@ -150,14 +150,17 @@ async function removeManual(entry: AccountingEntry) {
         <button
           type="button"
           class="btn btn--secondary"
-          @click="showCaisseForm = !showCaisseForm"
+          @click="showCaisseForm = true"
         >
-          {{ showCaisseForm ? "Annuler" : "Mettre à jour les soldes d'ouverture" }}
+          Mettre à jour les soldes d'ouverture
         </button>
       </div>
 
-      <section v-if="showCaisseForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Soldes d'ouverture par canal</h2>
+      <AppModal
+        :open="showCaisseForm"
+        title="Soldes d'ouverture par canal"
+        @close="showCaisseForm = false"
+      >
         <p class="panel__hint" style="margin-bottom: 1rem">
           Montants déjà disponibles au démarrage du suivi (avant les opérations enregistrées).
         </p>
@@ -201,22 +204,25 @@ async function removeManual(entry: AccountingEntry) {
             </button>
           </div>
         </form>
-      </section>
+      </AppModal>
 
       <div class="stock-actions">
         <button
           type="button"
           class="btn btn--primary"
-          @click="showForm = !showForm"
+          @click="showForm = true"
         >
-          {{ showForm ? "Masquer le formulaire" : "+ Saisie manuelle" }}
+          + Saisie manuelle
         </button>
       </div>
 
-      <section v-if="showForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Revenu ou dépense manuelle</h2>
+      <AppModal
+        :open="showForm"
+        title="Revenu ou dépense manuelle"
+        @close="showForm = false"
+      >
         <ManualEntryFormLazy @success="refresh(); showForm = false" />
-      </section>
+      </AppModal>
 
       <section class="panel">
         <h2 class="panel__title">Journal des opérations</h2>

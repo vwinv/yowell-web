@@ -1354,6 +1354,101 @@ a.btn--secondary {
   animation: panel-in 0.2s ease-out;
 }
 
+/* ——— Modal ——— */
+
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.5rem;
+  overflow-y: auto;
+  background: rgba(26, 26, 26, 0.45);
+  animation: modal-fade-in 0.2s ease-out;
+}
+
+.modal {
+  width: 100%;
+  max-height: calc(100vh - 3rem);
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(28, 25, 23, 0.18);
+  animation: panel-in 0.2s ease-out;
+}
+
+.modal--md {
+  max-width: 28rem;
+}
+
+.modal--lg {
+  max-width: 40rem;
+}
+
+.modal--xl {
+  max-width: 52rem;
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.35rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.modal__title {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.modal__close {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.modal__close:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.modal__body {
+  padding: 1.35rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes panel-in {
   from {
     opacity: 0;

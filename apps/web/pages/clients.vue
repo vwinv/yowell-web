@@ -48,19 +48,22 @@ async function removeClient(id: string, name: string) {
         <button
           type="button"
           class="btn btn--primary"
-          @click="showClientForm = !showClientForm"
+          @click="showClientForm = true"
         >
-          {{ showClientForm ? "Masquer le formulaire" : "+ Nouveau client" }}
+          + Nouveau client
         </button>
         <NuxtLink to="/ventes" class="btn btn--secondary">
           Enregistrer une vente →
         </NuxtLink>
       </div>
 
-      <section v-if="showClientForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Nouveau client</h2>
+      <AppModal
+        :open="showClientForm"
+        title="Nouveau client"
+        @close="showClientForm = false"
+      >
         <ClientFormLazy @success="refresh(); showClientForm = false" />
-      </section>
+      </AppModal>
 
       <section class="panel">
         <h2 class="panel__title">Liste des clients</h2>

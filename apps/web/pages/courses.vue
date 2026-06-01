@@ -246,25 +246,34 @@ function isEditing(runId: string, item: DeliveryRunLine) {
         <button
           type="button"
           class="btn btn--primary"
-          @click="showForm = !showForm; editingRunId = null"
+          @click="showForm = true; editingRunId = null"
         >
-          {{ showForm ? "Masquer le formulaire" : "+ Enregistrer une course" }}
+          + Enregistrer une course
         </button>
       </div>
 
-      <section v-if="showForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Nouvelle course</h2>
+      <AppModal
+        :open="showForm"
+        title="Nouvelle course"
+        size="xl"
+        @close="showForm = false"
+      >
         <DeliveryRunFormLazy @success="refresh(); showForm = false" />
-      </section>
+      </AppModal>
 
-      <section v-if="editingRun" class="panel collapsible-panel">
-        <h2 class="panel__title">Modifier la course</h2>
+      <AppModal
+        :open="!!editingRun"
+        title="Modifier la course"
+        size="xl"
+        @close="cancelEditRun"
+      >
         <DeliveryRunEditFormLazy
+          v-if="editingRun"
           :run="editingRun"
           @success="refresh(); editingRunId = null"
           @cancel="cancelEditRun"
         />
-      </section>
+      </AppModal>
 
       <section class="panel">
         <h2 class="panel__title">Historique des courses</h2>

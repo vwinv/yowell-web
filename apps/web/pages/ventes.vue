@@ -55,20 +55,16 @@ async function onQuoteSuccess() {
   showQuoteForm.value = false;
 }
 
-function toggleSaleForm() {
-  showSaleForm.value = !showSaleForm.value;
-  if (showSaleForm.value) {
-    showQuoteForm.value = false;
-    editingSaleId.value = null;
-  }
+function openSaleForm() {
+  showQuoteForm.value = false;
+  editingSaleId.value = null;
+  showSaleForm.value = true;
 }
 
-function toggleQuoteForm() {
-  showQuoteForm.value = !showQuoteForm.value;
-  if (showQuoteForm.value) {
-    showSaleForm.value = false;
-    editingSaleId.value = null;
-  }
+function openQuoteForm() {
+  showSaleForm.value = false;
+  editingSaleId.value = null;
+  showQuoteForm.value = true;
 }
 
 function startEditSale(sale: Sale) {
@@ -181,16 +177,16 @@ async function markAsPaid(sale: Sale) {
         <button
           type="button"
           class="btn btn--primary"
-          @click="toggleSaleForm()"
+          @click="openSaleForm()"
         >
-          {{ showSaleForm ? "Masquer le formulaire" : "+ Enregistrer une vente" }}
+          + Enregistrer une vente
         </button>
         <button
           type="button"
           class="btn btn--secondary"
-          @click="toggleQuoteForm()"
+          @click="openQuoteForm()"
         >
-          {{ showQuoteForm ? "Masquer le devis" : "+ Créer un devis" }}
+          + Créer un devis
         </button>
         <NuxtLink to="/clients" class="btn btn--secondary">
           Gérer les clients →
@@ -200,21 +196,28 @@ async function markAsPaid(sale: Sale) {
         </NuxtLink>
       </div>
 
-      <section v-if="editingSale" class="panel collapsible-panel">
-        <h2 class="panel__title">
-          {{ editingSale.kind === "quote" ? "Modifier le devis" : "Modifier la vente" }}
-        </h2>
+      <AppModal
+        :open="!!editingSale"
+        :title="editingSale?.kind === 'quote' ? 'Modifier le devis' : 'Modifier la vente'"
+        size="xl"
+        @close="cancelEditSale"
+      >
         <SaleEditFormLazy
+          v-if="editingSale"
           :sale="editingSale"
           :clients="clientOptions"
           :products="products ?? []"
           @success="onSaleEditSuccess"
           @cancel="cancelEditSale"
         />
-      </section>
+      </AppModal>
 
-      <section v-if="showSaleForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Nouvelle vente</h2>
+      <AppModal
+        :open="showSaleForm"
+        title="Nouvelle vente"
+        size="xl"
+        @close="showSaleForm = false"
+      >
         <p
           v-if="!clientOptions.length"
           class="form-error"
@@ -230,10 +233,14 @@ async function markAsPaid(sale: Sale) {
           :products="products ?? []"
           @success="onSaleSuccess"
         />
-      </section>
+      </AppModal>
 
-      <section v-if="showQuoteForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Nouveau devis</h2>
+      <AppModal
+        :open="showQuoteForm"
+        title="Nouveau devis"
+        size="xl"
+        @close="showQuoteForm = false"
+      >
         <p class="panel__hint" style="margin-bottom: 1rem">
           Le devis n'impacte pas le stock — idéal avant d'avoir de la production.
         </p>
@@ -262,7 +269,7 @@ async function markAsPaid(sale: Sale) {
           :products="products ?? []"
           @success="onQuoteSuccess"
         />
-      </section>
+      </AppModal>
 
       <section class="panel">
         <h2 class="panel__title">Historique</h2>

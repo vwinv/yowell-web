@@ -54,16 +54,16 @@ const ProductFormLazy = defineAsyncComponent(
 
 const apiOrigin = useApiOrigin();
 
-function toggleProductForm() {
+function openProductForm() {
   showProductionForm.value = false;
   editingProductId.value = null;
-  showProductForm.value = !showProductForm.value;
+  showProductForm.value = true;
 }
 
-function toggleProductionForm() {
+function openProductionForm() {
   showProductForm.value = false;
   editingProductId.value = null;
-  showProductionForm.value = !showProductionForm.value;
+  showProductionForm.value = true;
 }
 
 function onProductSuccess() {
@@ -348,28 +348,34 @@ async function removeProduct(id: string, name: string) {
         <button
           type="button"
           class="btn btn--primary"
-          :aria-expanded="showProductForm"
-          @click="toggleProductForm"
+          @click="openProductForm"
         >
-          {{ showProductForm ? "Masquer le formulaire" : "+ Enregistrer un produit" }}
+          + Enregistrer un produit
         </button>
         <button
           type="button"
           class="btn btn--secondary"
-          :aria-expanded="showProductionForm"
-          @click="toggleProductionForm"
+          @click="openProductionForm"
         >
-          {{ showProductionForm ? "Masquer le formulaire" : "+ Noter une production" }}
+          + Noter une production
         </button>
       </div>
 
-      <section v-if="showProductForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Enregistrer un produit</h2>
+      <AppModal
+        :open="showProductForm"
+        title="Enregistrer un produit"
+        size="xl"
+        @close="showProductForm = false"
+      >
         <ProductFormLazy @success="onProductSuccess" />
-      </section>
+      </AppModal>
 
-      <section v-if="editingProductId" class="panel collapsible-panel">
-        <h2 class="panel__title">Modifier un produit</h2>
+      <AppModal
+        :open="!!editingProductId"
+        title="Modifier un produit"
+        size="xl"
+        @close="cancelEditProduct"
+      >
         <form class="form-grid" @submit.prevent="submitEditProduct">
           <div class="form-field form-field--wide">
             <label for="edit-product-name">Nom du produit</label>
@@ -500,10 +506,13 @@ async function removeProduct(id: string, name: string) {
         </form>
         <p v-if="editError" class="form-error">{{ editError }}</p>
         <p v-if="editSuccess" class="form-success">{{ editSuccess }}</p>
-      </section>
+      </AppModal>
 
-      <section v-if="showProductionForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Enregistrer une production</h2>
+      <AppModal
+        :open="showProductionForm"
+        title="Enregistrer une production"
+        @close="showProductionForm = false"
+      >
         <form class="form-grid" @submit.prevent="submitProduction">
           <div class="form-field form-field--wide">
             <label for="production-product">Produit</label>
@@ -580,7 +589,7 @@ async function removeProduct(id: string, name: string) {
         </form>
         <p v-if="productionError" class="form-error">{{ productionError }}</p>
         <p v-if="productionSuccess" class="form-success">{{ productionSuccess }}</p>
-      </section>
+      </AppModal>
 
       <section v-if="data?.products.length" class="panel" style="margin-bottom: 1.25rem">
         <div class="panel__header-row">

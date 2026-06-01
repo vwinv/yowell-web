@@ -106,19 +106,25 @@ async function submitEditUser() {
         <button
           type="button"
           class="btn btn--primary"
-          @click="showForm = !showForm"
+          @click="showForm = true"
         >
-          {{ showForm ? "Masquer le formulaire" : "+ Nouvel utilisateur" }}
+          + Nouvel utilisateur
         </button>
       </div>
 
-      <section v-if="showForm" class="panel collapsible-panel">
-        <h2 class="panel__title">Nouveau compte</h2>
+      <AppModal
+        :open="showForm"
+        title="Nouveau compte"
+        @close="showForm = false"
+      >
         <UserFormLazy @success="refresh(); showForm = false" />
-      </section>
+      </AppModal>
 
-      <section v-if="editingUserId" class="panel collapsible-panel">
-        <h2 class="panel__title">Modifier un utilisateur</h2>
+      <AppModal
+        :open="!!editingUserId"
+        title="Modifier un utilisateur"
+        @close="cancelEditUser"
+      >
         <form class="form-grid" @submit.prevent="submitEditUser">
           <div class="form-field">
             <label for="edit-user-name">Nom *</label>
@@ -158,7 +164,7 @@ async function submitEditUser() {
             </button>
           </div>
         </form>
-      </section>
+      </AppModal>
 
       <section class="panel">
         <h2 class="panel__title">Comptes actifs</h2>
