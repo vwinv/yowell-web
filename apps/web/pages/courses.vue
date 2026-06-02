@@ -60,11 +60,44 @@ const editingRemaining = ref<string | null>(null);
 const remainingDrafts = ref<Record<string, string>>({});
 const remainingInitialStockDrafts = ref<Record<string, number | "">>({});
 
+function runItemFromRemaining(entry: DeliveryRemainingItem) {
+  const run = data.value?.runs.find((r) => r.id === entry.runId);
+  const item = run?.items.find((i) => i.id === entry.itemId);
+  if (!run || !item) return null;
+  return { run, item };
+}
+
 function openRemainingEditor(runId: string, item: DeliveryRunLine) {
   const key = itemKey(runId, item.id);
   editingRemaining.value = key;
   remainingDrafts.value[key] = item.remainingNote ?? "";
   remainingInitialStockDrafts.value[key] = item.initialRemainingStock ?? item.quantity;
+}
+
+function openRemainingEditorFromList(entry: DeliveryRemainingItem) {
+  const found = runItemFromRemaining(entry);
+  if (found) {
+    openRemainingEditor(found.run.id, found.item);
+    return;
+  }
+  const key = itemKey(entry.runId, entry.itemId);
+  editingRemaining.value = key;
+  remainingDrafts.value[key] = entry.remainingNote ?? "";
+  remainingInitialStockDrafts.value[key] =
+    entry.initialRemainingStock ?? entry.quantity;
+}
+
+function isEditingEntry(entry: DeliveryRemainingItem) {
+  return editingRemaining.value === itemKey(entry.runId, entry.itemId);
+}
+
+async function saveRemainingNoteFromList(entry: DeliveryRemainingItem) {
+  const found = runItemFromRemaining(entry);
+  if (!found) {
+    alert("Course introuvable — recharge la page.");
+    return;
+  }
+  await saveRemainingNote(found.run.id, found.item);
 }
 
 async function persistRemaining(
@@ -131,10 +164,9 @@ async function markNoRemaining(runId: string, item: DeliveryRunLine) {
 }
 
 async function markUsedFromList(entry: DeliveryRemainingItem) {
-  const run = data.value?.runs.find((r) => r.id === entry.runId);
-  const item = run?.items.find((i) => i.id === entry.itemId);
-  if (!run || !item) return;
-  await markNoRemaining(run.id, item);
+  const found = runItemFromRemaining(entry);
+  if (!found) return;
+  await markNoRemaining(found.run.id, found.item);
 }
 
 function remainingSummary(items: DeliveryRunLine[]) {
@@ -214,24 +246,84 @@ function isEditing(runId: string, item: DeliveryRunLine) {
               >
                 <td>{{ entry.label }}</td>
                 <td>{{ entry.quantity }}</td>
-                <td>{{ entry.initialRemainingStock ?? "—" }}</td>
-                <td>
-                  <strong v-if="entry.remainingNote" class="remaining-note-text">
-                    {{ entry.remainingNote }}
-                  </strong>
-                  <span v-else class="remaining-note-missing">À préciser dans l'historique</span>
-                </td>
-                <td>{{ formatDate(entry.runDate) }}</td>
-                <td>
-                  <button
-                    type="button"
-                    class="btn btn--ghost remaining-btn"
-                    :disabled="savingRemaining === itemKey(entry.runId, entry.itemId)"
-                    @click="markUsedFromList(entry)"
-                  >
-                    Plus de reste
-                  </button>
-                </td>
+                <template v-if="!isEditingEntry(entry)">
+                  <td>{{ entry.initialRemainingStock ?? "—" }}</td>
+                  <td>
+                    <strong v-if="entry.remainingNote" class="remaining-note-text">
+                      {{ entry.remainingNote }}
+                    </strong>
+                    <span v-else class="remaining-note-missing">À préciser</span>
+                  </td>
+                  <td>{{ formatDate(entry.runDate) }}</td>
+                  <td>
+                    <div class="remaining-actions">
+                      <button
+                        type="button"
+                        class="btn btn--ghost remaining-btn"
+                        @click="openRemainingEditorFromList(entry)"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn--ghost remaining-btn"
+                        :disabled="savingRemaining === itemKey(entry.runId, entry.itemId)"
+                        @click="markUsedFromList(entry)"
+                      >
+                        Plus de reste
+                      </button>
+                    </div>
+                  </td>
+                </template>
+                <template v-else>
+                  <td colspan="2">
+                    <div class="remaining-form remaining-form--list">
+                      <label class="sr-only" :for="`list-remaining-stock-${entry.itemId}`">
+                        Stock initial restant
+                      </label>
+                      <input
+                        :id="`list-remaining-stock-${entry.itemId}`"
+                        v-model.number="remainingInitialStockDrafts[itemKey(entry.runId, entry.itemId)]"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="table-input remaining-note-input"
+                        placeholder="Stock initial restant (ex. 2.5)"
+                      />
+                      <label class="sr-only" :for="`list-remaining-${entry.itemId}`">
+                        Ce qu'il reste
+                      </label>
+                      <input
+                        :id="`list-remaining-${entry.itemId}`"
+                        v-model="remainingDrafts[itemKey(entry.runId, entry.itemId)]"
+                        type="text"
+                        class="table-input remaining-note-input"
+                        placeholder="Ex. 2 kg d'oranges, 3 bouteilles…"
+                        @keyup.enter="saveRemainingNoteFromList(entry)"
+                      />
+                    </div>
+                  </td>
+                  <td>{{ formatDate(entry.runDate) }}</td>
+                  <td>
+                    <div class="remaining-actions">
+                      <button
+                        type="button"
+                        class="btn btn--primary remaining-btn"
+                        :disabled="savingRemaining === itemKey(entry.runId, entry.itemId)"
+                        @click="saveRemainingNoteFromList(entry)"
+                      >
+                        Enregistrer
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn--ghost remaining-btn"
+                        @click="editingRemaining = null"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </td>
+                </template>
               </tr>
             </tbody>
           </table>
