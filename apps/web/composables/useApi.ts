@@ -124,7 +124,10 @@ export function useApiFetch<T>(
   const token = useAuthToken();
 
   return useFetch<T>(url, {
-    dedupe: "defer",
+    // lazy: navigation immédiate ; le layout (topbar) ne devance plus le contenu
+    lazy: options.lazy ?? true,
+    // cancel: annule la requête de la page précédente (defer bloquait la suivante)
+    dedupe: options.dedupe ?? "cancel",
     ...options,
     onRequest({ options: reqOptions }) {
       if (token.value) {
@@ -153,6 +156,7 @@ export function useApiAsyncData<T>(
     () => apiFetch<T>(url()),
     {
       watch: watchSources,
+      lazy: true,
       server: false,
     },
   );
