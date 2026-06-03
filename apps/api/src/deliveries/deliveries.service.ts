@@ -22,6 +22,21 @@ export class DeliveriesService {
     return runs.map(mapDeliveryRun);
   }
 
+  async listInPeriod(from: string, to: string) {
+    const runs = await this.prisma.deliveryRun.findMany({
+      where: {
+        date: {
+          gte: new Date(`${from}T00:00:00.000Z`),
+          lte: new Date(`${to}T23:59:59.999Z`),
+        },
+      },
+      include: { items: true, fees: true },
+      orderBy: { date: "desc" },
+    });
+
+    return runs.map(mapDeliveryRun);
+  }
+
   async getOverview(): Promise<DeliveriesOverview> {
     const runs = await this.listAll();
     const now = new Date();

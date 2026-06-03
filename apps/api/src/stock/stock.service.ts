@@ -64,18 +64,22 @@ export class StockService {
   }
 
   async getOverview(): Promise<StockOverview> {
-    const [products, productions] = await Promise.all([
-      this.listProducts(),
-      this.listProductions(),
-    ]);
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 1);
 
-    const productionsThisMonth = productions.filter((p) => {
-      const d = new Date(p.producedAt);
-      return d.getMonth() === month && d.getFullYear() === year;
-    }).length;
+    const [products, recentProductions, productionsThisMonth] =
+      await Promise.all([
+        this.listProducts(),
+        this.listProductions(20),
+        this.prisma.productionRecord.count({
+          where: {
+            producedAt: { gte: monthStart, lt: monthEnd },
+          },
+        }),
+      ]);
 
     let totalUnitsInStock = 0;
     let lowStockCount = 0;
@@ -91,12 +95,7 @@ export class StockService {
 
     return {
       products,
-      recentProductions: [...productions]
-        .sort(
-          (a, b) =>
-            new Date(b.producedAt).getTime() - new Date(a.producedAt).getTime(),
-        )
-        .slice(0, 20),
+      recentProductions,
       totalUnitsInStock,
       lowStockCount,
       productionsThisMonth,
@@ -115,9 +114,10 @@ export class StockService {
     return products.map(mapProduct);
   }
 
-  async listProductions(): Promise<ProductionRecord[]> {
+  async listProductions(limit?: number): Promise<ProductionRecord[]> {
     const productions = await this.prisma.productionRecord.findMany({
       orderBy: { producedAt: "desc" },
+      ...(limit ? { take: limit } : {}),
     });
 
     return productions.map(mapProductionRecord);

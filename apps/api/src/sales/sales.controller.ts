@@ -49,7 +49,7 @@ export class SalesController {
   @Get(":id/invoice")
   async getInvoice(@Param("id") id: string, @Res() res: Response) {
     const sale = await this.salesService.findById(id);
-    const buffer = await this.salesService.generateInvoicePdf(id);
+    const buffer = await this.salesService.generateInvoicePdf(id, sale);
     const shortId = id.slice(0, 8);
     const prefix = sale.kind === "quote" ? "devis" : "facture";
     res.set({

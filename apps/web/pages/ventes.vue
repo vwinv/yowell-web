@@ -8,20 +8,21 @@ import type {
 } from "@yowell/shared";
 import { formatCfa, PAYMENT_CHANNEL_OPTIONS, paymentChannelLabel } from "@yowell/shared";
 
-const { data, pending, refresh } = await useApiFetch<SalesOverview>(
-  useApiUrl("/sales/overview"),
-  { key: "sales-overview" },
-);
-
-const { data: clientsData } = await useApiFetch<ClientsOverview>(
-  useApiUrl("/clients/overview"),
-  { key: "clients-for-sales" },
-);
-
-const { data: products } = await useApiFetch<JuiceProduct[]>(
-  useApiUrl("/stock/products"),
-  { key: "products-for-sales" },
-);
+const [
+  { data, pending, refresh },
+  { data: clientsData },
+  { data: products },
+] = await Promise.all([
+  useApiFetch<SalesOverview>(useApiUrl("/sales/overview"), {
+    key: "sales-overview",
+  }),
+  useApiFetch<ClientsOverview>(useApiUrl("/clients/overview"), {
+    key: "clients-overview",
+  }),
+  useApiFetch<JuiceProduct[]>(useApiUrl("/stock/products"), {
+    key: "products-for-sales",
+  }),
+]);
 
 const showSaleForm = ref(false);
 const showQuoteForm = ref(false);
@@ -35,7 +36,9 @@ const SaleEditFormLazy = defineAsyncComponent(
 
 const editingSale = computed<Sale | null>(() => {
   if (!editingSaleId.value) return null;
-  return data.value?.sales.find((s) => s.id === editingSaleId.value) ?? null;
+  return (
+    data.value?.recentSales.find((s) => s.id === editingSaleId.value) ?? null
+  );
 });
 
 const clientOptions = computed(
@@ -105,7 +108,8 @@ async function convertToSale(sale: Sale) {
     });
     await Promise.all([
       refresh(),
-      refreshNuxtData("stock-products"),
+      refreshNuxtData("products-for-sales"),
+      refreshNuxtData("stock-overview"),
     ]);
   } catch {
     alert(

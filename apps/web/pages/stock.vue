@@ -107,8 +107,15 @@ function cancelEditProduction() {
   editProductionSuccess.value = "";
 }
 
+async function refreshStockData() {
+  await Promise.all([
+    refresh(),
+    refreshNuxtData("products-for-sales"),
+  ]);
+}
+
 function onProductSuccess() {
-  refresh();
+  void refreshStockData();
   showProductForm.value = false;
 }
 
@@ -227,7 +234,7 @@ async function submitEditProduct() {
       body: formData,
     });
     editSuccess.value = "Produit modifie avec succes.";
-    await refresh();
+    await refreshStockData();
     editingProductId.value = null;
     editPhotoFiles.value = [];
     editExistingPhotoUrls.value = [];
@@ -272,6 +279,20 @@ const editSelectedProduct = computed(() =>
 const editEnabledFormats = computed((): JuiceFormat[] =>
   editSelectedProduct.value?.formats.filter((f) => f.enabled) ?? [],
 );
+
+type StockSnapshotLine = { product: JuiceProduct; format: JuiceFormat };
+
+const stockSnapshotLines = computed((): StockSnapshotLine[] => {
+  const lines: StockSnapshotLine[] = [];
+  for (const product of data.value?.products ?? []) {
+    for (const format of product.formats) {
+      if (format.enabled && format.quantity > 0) {
+        lines.push({ product, format });
+      }
+    }
+  }
+  return lines;
+});
 
 const stockAsOfLabel = ref("");
 
@@ -372,7 +393,7 @@ async function submitProduction() {
     productionForm.quantity = 1;
     productionForm.notes = "";
     productionSuccess.value = "Production enregistrée — stock mis à jour.";
-    await refresh();
+    await refreshStockData();
     showProductionForm.value = false;
   } catch {
     productionError.value = "Impossible d'enregistrer la production.";
@@ -384,7 +405,7 @@ async function submitProduction() {
 async function removeProduct(id: string, name: string) {
   if (!confirm(`Supprimer « ${name} » ?`)) return;
   await apiFetch(useApiUrl(`/stock/products/${id}`), { method: "DELETE" });
-  await refresh();
+  await refreshStockData();
 }
 
 async function submitEditProduction() {
@@ -421,7 +442,7 @@ async function submitEditProduction() {
       },
     );
     editProductionSuccess.value = "Production modifiée — stock mis à jour.";
-    await refresh();
+    await refreshStockData();
     editingProductionId.value = null;
   } catch {
     editProductionError.value =
@@ -446,7 +467,7 @@ async function cancelProductionRecord(prod: ProductionRecord) {
     await apiFetch(useApiUrl(`/stock/productions/${prod.id}`), {
       method: "DELETE",
     });
-    await refresh();
+    await refreshStockData();
   } catch {
     alert(
       "Impossible d'annuler cette production. Le stock actuel est peut-être insuffisant (des ventes ont déjà consommé des unités).",
@@ -484,7 +505,10 @@ async function cancelProductionRecord(prod: ProductionRecord) {
           </div>
         </div>
 
-        <div v-if="data?.products.length" class="table-wrap stock-snapshot__table">
+        <div
+          v-if="stockSnapshotLines.length"
+          class="table-wrap stock-snapshot__table"
+        >
           <table class="table">
             <thead>
               <tr>
@@ -494,39 +518,44 @@ async function cancelProductionRecord(prod: ProductionRecord) {
               </tr>
             </thead>
             <tbody>
-              <template v-for="p in data.products" :key="p.id">
-                <tr
-                  v-for="f in p.formats.filter((x) => x.enabled)"
-                  :key="`${p.id}-${f.volume}`"
-                >
-                  <td>{{ p.name }}</td>
-                  <td>
-                    <span class="volume-badge" :class="volumeClass(f.volume)">
-                      {{ f.volume }}
-                    </span>
-                  </td>
-                  <td :class="{ 'stock-low': isFormatLow(f) }">
-                    {{ f.quantity }}
-                    <span
-                      v-if="isFormatLow(f)"
-                      class="stock-snapshot__low-hint"
-                    >
-                      (stock bas)
-                    </span>
-                  </td>
-                </tr>
-              </template>
+              <tr
+                v-for="line in stockSnapshotLines"
+                :key="`${line.product.id}-${line.format.volume}`"
+              >
+                <td>{{ line.product.name }}</td>
+                <td>
+                  <span
+                    class="volume-badge"
+                    :class="volumeClass(line.format.volume)"
+                  >
+                    {{ line.format.volume }}
+                  </span>
+                </td>
+                <td :class="{ 'stock-low': isFormatLow(line.format) }">
+                  {{ line.format.quantity }}
+                  <span
+                    v-if="isFormatLow(line.format)"
+                    class="stock-snapshot__low-hint"
+                  >
+                    (stock bas)
+                  </span>
+                </td>
+              </tr>
             </tbody>
             <tfoot>
               <tr>
                 <td colspan="2"><strong>Total général</strong></td>
                 <td>
-                  <strong>{{ data.totalUnitsInStock }}</strong>
+                  <strong>{{ data?.totalUnitsInStock ?? 0 }}</strong>
                 </td>
               </tr>
             </tfoot>
           </table>
         </div>
+        <EmptyState
+          v-else-if="data?.products.length"
+          message="Aucune unité en stock pour le moment."
+        />
         <EmptyState
           v-else
           message="Aucun produit enregistré — le stock actuel est vide."
@@ -875,7 +904,7 @@ async function cancelProductionRecord(prod: ProductionRecord) {
       </AppModal>
 
       <div
-        v-show="activeTab === 'catalogue'"
+        v-if="activeTab === 'catalogue'"
         class="page-tab-panel"
         role="tabpanel"
         aria-label="Catalogue"
@@ -962,6 +991,8 @@ async function cancelProductionRecord(prod: ProductionRecord) {
                   :key="url"
                   :src="uploadUrl(url)"
                   :alt="`${p.name} — photo ${i + 1}`"
+                  loading="lazy"
+                  decoding="async"
                 />
               </template>
               <span v-else>Sans photo</span>
@@ -1057,6 +1088,8 @@ async function cancelProductionRecord(prod: ProductionRecord) {
                       :alt="p.name"
                       width="48"
                       height="48"
+                      loading="lazy"
+                      decoding="async"
                       style="object-fit: cover; border-radius: 6px"
                     />
                     <span v-else>—</span>
@@ -1119,6 +1152,8 @@ async function cancelProductionRecord(prod: ProductionRecord) {
                     :alt="firstInventoryRow.product.name"
                     width="48"
                     height="48"
+                    loading="lazy"
+                    decoding="async"
                     style="object-fit: cover; border-radius: 6px"
                   />
                   <span v-else>—</span>
@@ -1167,7 +1202,7 @@ async function cancelProductionRecord(prod: ProductionRecord) {
       </div>
 
       <div
-        v-show="activeTab === 'production'"
+        v-if="activeTab === 'production'"
         class="page-tab-panel"
         role="tabpanel"
         aria-label="Production"

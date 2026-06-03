@@ -30,9 +30,9 @@ export class StatsService {
   ): Promise<StatsOverview> {
     const { from, to } = period;
     const [sales, deliveries, manualEntries] = await Promise.all([
-      this.salesService.listAll(),
-      this.deliveriesService.listAll(),
-      this.accountingService.listManualEntries(),
+      this.salesService.listInPeriod(from, to),
+      this.deliveriesService.listInPeriod(from, to),
+      this.accountingService.listManualEntriesInPeriod(from, to),
     ]);
 
     let revenue = 0;

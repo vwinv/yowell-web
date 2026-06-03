@@ -3,7 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { JuiceVolume as PrismaJuiceVolume, SalePaymentStatus as PrismaSalePaymentStatus } from "@prisma/client";
+import {
+  JuiceVolume as PrismaJuiceVolume,
+  SaleKind as PrismaSaleKind,
+  SalePaymentStatus as PrismaSalePaymentStatus,
+} from "@prisma/client";
 import {
   computeSaleTotalAmount,
   type CreateSaleInput,
@@ -98,6 +102,21 @@ export class SalesService {
     return sales.map(mapSale);
   }
 
+  async listInPeriod(from: string, to: string): Promise<Sale[]> {
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        orderedAt: {
+          gte: new Date(`${from}T00:00:00.000Z`),
+          lte: new Date(`${to}T23:59:59.999Z`),
+        },
+      },
+      include: { items: true },
+      orderBy: { orderedAt: "desc" },
+    });
+
+    return sales.map(mapSale);
+  }
+
   async findById(id: string): Promise<Sale> {
     const sale = await this.prisma.sale.findUnique({
       where: { id },
@@ -109,51 +128,68 @@ export class SalesService {
     return mapSale(sale);
   }
 
-  async generateInvoicePdf(id: string): Promise<Buffer> {
-    const sale = await this.findById(id);
+  async generateInvoicePdf(id: string, existing?: Sale): Promise<Buffer> {
+    const sale = existing ?? (await this.findById(id));
     const client = await this.clientsService.findById(sale.clientId);
     return buildSaleInvoicePdf(sale, client);
   }
 
   async getOverview(): Promise<SalesOverview> {
-    const sales = await this.listAll();
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
     const month = now.getMonth();
     const year = now.getFullYear();
+    const monthStart = new Date(Date.UTC(year, month, 1));
+    const monthEnd = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+    const dayStart = new Date(`${today}T00:00:00.000Z`);
+    const dayEnd = new Date(`${today}T23:59:59.999Z`);
 
-    const sorted = [...sales].sort(
-      (a, b) =>
-        new Date(b.orderedAt).getTime() - new Date(a.orderedAt).getTime(),
-    );
+    const saleKind = PrismaSaleKind.SALE;
+    const paid = PrismaSalePaymentStatus.PAID;
 
-    let salesToday = 0;
-    let revenueToday = 0;
-    let revenueMonth = 0;
+    const [
+      recentRows,
+      salesToday,
+      revenueTodayAgg,
+      revenueMonthAgg,
+    ] = await Promise.all([
+      this.prisma.sale.findMany({
+        include: { items: true },
+        orderBy: { orderedAt: "desc" },
+        take: 30,
+      }),
+      this.prisma.sale.count({
+        where: {
+          kind: saleKind,
+          orderedAt: { gte: dayStart, lte: dayEnd },
+        },
+      }),
+      this.prisma.sale.aggregate({
+        where: {
+          kind: saleKind,
+          paymentStatus: paid,
+          orderedAt: { gte: dayStart, lte: dayEnd },
+        },
+        _sum: { totalAmount: true },
+      }),
+      this.prisma.sale.aggregate({
+        where: {
+          kind: saleKind,
+          paymentStatus: paid,
+          orderedAt: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { totalAmount: true },
+      }),
+    ]);
 
-    for (const sale of sales) {
-      if (sale.kind === "quote") continue;
-
-      const d = new Date(sale.orderedAt);
-      const saleDay = sale.orderedAt.slice(0, 10);
-      if (saleDay === today) {
-        salesToday += 1;
-      }
-      if (sale.paymentStatus !== "paid") continue;
-      if (saleDay === today) {
-        revenueToday += sale.totalAmount;
-      }
-      if (d.getMonth() === month && d.getFullYear() === year) {
-        revenueMonth += sale.totalAmount;
-      }
-    }
+    const recentSales = recentRows.map(mapSale);
 
     return {
-      sales: sorted,
-      recentSales: sorted.slice(0, 30),
+      sales: recentSales,
+      recentSales,
       salesToday,
-      revenueToday,
-      revenueMonth,
+      revenueToday: revenueTodayAgg._sum.totalAmount ?? 0,
+      revenueMonth: revenueMonthAgg._sum.totalAmount ?? 0,
     };
   }
 

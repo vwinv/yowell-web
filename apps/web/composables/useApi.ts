@@ -90,7 +90,7 @@ export function apiFetch<T>(
   options: ApiFetchOptions<T> = {},
 ) {
   const token = useAuthToken();
-  const { autoReload = true, ...fetchOptions } = options;
+  const { autoReload = false, ...fetchOptions } = options;
 
   const requestMethod = String(fetchOptions.method ?? "GET").toUpperCase();
   const shouldReload =
@@ -124,6 +124,7 @@ export function useApiFetch<T>(
   const token = useAuthToken();
 
   return useFetch<T>(url, {
+    dedupe: "defer",
     ...options,
     onRequest({ options: reqOptions }) {
       if (token.value) {

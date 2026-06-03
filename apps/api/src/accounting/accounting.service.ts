@@ -129,6 +129,22 @@ export class AccountingService implements OnModuleInit {
     return entries.map(mapManualAccountingEntry);
   }
 
+  async listManualEntriesInPeriod(
+    from: string,
+    to: string,
+  ): Promise<ManualAccountingEntry[]> {
+    const entries = await this.prisma.manualAccountingEntry.findMany({
+      where: {
+        date: {
+          gte: new Date(`${from}T00:00:00.000Z`),
+          lte: new Date(`${to}T23:59:59.999Z`),
+        },
+      },
+      orderBy: { date: "desc" },
+    });
+    return entries.map(mapManualAccountingEntry);
+  }
+
   async updateCaisse(input: UpdateCaisseInput): Promise<number> {
     if (input.amount < 0) {
       throw new BadRequestException("Le montant de la caisse ne peut pas être négatif.");
