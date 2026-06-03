@@ -1335,6 +1335,162 @@ tr.row--fee td {
   margin-bottom: 1.25rem;
 }
 
+/* ——— Page tabs ——— */
+
+.page-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  padding: 0.25rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.page-tabs__tab {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.page-tabs__tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+.page-tabs__tab--active {
+  color: var(--green);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+}
+
+.page-tab-panel {
+  animation: panel-in 0.2s ease-out;
+}
+
+/* ——— Stock actuel (lecture seule) ——— */
+
+.stock-snapshot {
+  margin-bottom: 1.25rem;
+  background: linear-gradient(180deg, var(--green-soft) 0%, var(--surface) 2.5rem);
+  border-color: color-mix(in srgb, var(--green) 25%, var(--border));
+}
+
+.stock-snapshot__header {
+  margin-bottom: 0.75rem;
+}
+
+.stock-snapshot__time {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.stock-snapshot__summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  text-align: right;
+}
+
+.stock-snapshot__badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.stock-snapshot__total {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.stock-snapshot__total strong {
+  font-size: 1.35rem;
+  color: var(--green);
+}
+
+.stock-snapshot__table .table tfoot td {
+  background: var(--green-soft);
+  border-top: 2px solid color-mix(in srgb, var(--green) 30%, var(--border));
+}
+
+.stock-snapshot__low-hint {
+  margin-left: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.stock-snapshot .table tbody tr {
+  cursor: default;
+}
+
+.stock-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.stock-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.stock-toggle-btn:hover {
+  background: var(--bg);
+}
+
+.stock-toggle-btn--expand {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border));
+}
+
+.stock-toggle-btn--expand:hover {
+  background: var(--green-soft);
+}
+
+.stock-toggle-btn--collapse {
+  color: #c62828;
+  border-color: color-mix(in srgb, #c62828 30%, var(--border));
+}
+
+.stock-toggle-btn--collapse:hover {
+  background: #fdecea;
+}
+
 .btn--secondary {
   color: var(--brand-teal-dark);
   background: var(--green-soft);

@@ -44,6 +44,9 @@ const showProductForm = ref(false);
 const showProductionForm = ref(false);
 const isCatalogueCollapsed = ref(false);
 const isInventoryCollapsed = ref(false);
+const isProductionHistoryCollapsed = ref(false);
+type StockTab = "catalogue" | "production";
+const activeTab = ref<StockTab>("catalogue");
 const editingProductId = ref<string | null>(null);
 const editSubmitting = ref(false);
 const editError = ref("");
@@ -79,6 +82,7 @@ function openProductionForm() {
   showProductForm.value = false;
   editingProductId.value = null;
   editingProductionId.value = null;
+  activeTab.value = "production";
   showProductionForm.value = true;
 }
 
@@ -94,6 +98,7 @@ function startEditProduction(prod: ProductionRecord) {
   showProductionForm.value = false;
   editingProductId.value = null;
   editingProductionId.value = prod.id;
+  activeTab.value = "production";
 }
 
 function cancelEditProduction() {
@@ -246,6 +251,9 @@ const selectedProduct = computed(() =>
   data.value?.products.find((p) => p.id === productionForm.productId),
 );
 const firstProduct = computed(() => data.value?.products[0] ?? null);
+const firstProduction = computed(
+  () => data.value?.recentProductions[0] ?? null,
+);
 const firstInventoryRow = computed(() => {
   const product = firstProduct.value;
   if (!product) return null;
@@ -263,6 +271,23 @@ const editSelectedProduct = computed(() =>
 
 const editEnabledFormats = computed((): JuiceFormat[] =>
   editSelectedProduct.value?.formats.filter((f) => f.enabled) ?? [],
+);
+
+const stockAsOfLabel = ref("");
+
+function updateStockAsOfLabel() {
+  stockAsOfLabel.value = new Date().toLocaleString("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+watch(
+  () => data.value,
+  (overview) => {
+    if (overview) updateStockAsOfLabel();
+  },
+  { immediate: true },
 );
 
 watch(
@@ -442,49 +467,94 @@ async function cancelProductionRecord(prod: ProductionRecord) {
     <p v-if="pending" class="loading">Chargement du stock</p>
 
     <template v-else>
-      <div class="stats-grid">
-        <StatCard
-          label="Unités en stock"
-          :value="data?.totalUnitsInStock ?? 0"
-          icon="📦"
-          tone="green"
-        />
-        <StatCard
-          label="Produits"
-          :value="data?.products.length ?? 0"
-          icon="🧃"
-          tone="blue"
-        />
-        <StatCard
-          label="Productions (mois)"
-          :value="data?.productionsThisMonth ?? 0"
-          icon="⚗️"
-          tone="gold"
-        />
-        <StatCard
-          label="Stock bas"
-          :value="data?.lowStockCount ?? 0"
-          icon="⚠️"
-          tone="orange"
-        />
-      </div>
+      <section class="panel stock-snapshot" aria-readonly="true">
+        <div class="panel__header-row stock-snapshot__header">
+          <div>
+            <h2 class="panel__title">Stock actuel</h2>
+            <p class="stock-snapshot__time">
+              À l'instant — {{ stockAsOfLabel }}
+            </p>
+          </div>
+          <div class="stock-snapshot__summary">
+            <span class="stock-snapshot__badge">Lecture seule</span>
+            <p class="stock-snapshot__total">
+              <strong>{{ data?.totalUnitsInStock ?? 0 }}</strong>
+              unité{{ (data?.totalUnitsInStock ?? 0) > 1 ? "s" : "" }} au total
+            </p>
+          </div>
+        </div>
 
-      <div class="stock-actions">
+        <div v-if="data?.products.length" class="table-wrap stock-snapshot__table">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Produit</th>
+                <th>Format</th>
+                <th>Reste en stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="p in data.products" :key="p.id">
+                <tr
+                  v-for="f in p.formats.filter((x) => x.enabled)"
+                  :key="`${p.id}-${f.volume}`"
+                >
+                  <td>{{ p.name }}</td>
+                  <td>
+                    <span class="volume-badge" :class="volumeClass(f.volume)">
+                      {{ f.volume }}
+                    </span>
+                  </td>
+                  <td :class="{ 'stock-low': isFormatLow(f) }">
+                    {{ f.quantity }}
+                    <span
+                      v-if="isFormatLow(f)"
+                      class="stock-snapshot__low-hint"
+                    >
+                      (stock bas)
+                    </span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2"><strong>Total général</strong></td>
+                <td>
+                  <strong>{{ data.totalUnitsInStock }}</strong>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <EmptyState
+          v-else
+          message="Aucun produit enregistré — le stock actuel est vide."
+        />
+      </section>
+
+      <nav class="page-tabs" role="tablist" aria-label="Sections stock">
         <button
           type="button"
-          class="btn btn--primary"
-          @click="openProductForm"
+          role="tab"
+          class="page-tabs__tab"
+          :class="{ 'page-tabs__tab--active': activeTab === 'catalogue' }"
+          :aria-selected="activeTab === 'catalogue'"
+          @click="activeTab = 'catalogue'"
         >
-          + Enregistrer un produit
+          Catalogue
         </button>
         <button
           type="button"
-          class="btn btn--secondary"
-          @click="openProductionForm"
+          role="tab"
+          class="page-tabs__tab"
+          :class="{ 'page-tabs__tab--active': activeTab === 'production' }"
+          :aria-selected="activeTab === 'production'"
+          @click="activeTab = 'production'"
         >
-          + Noter une production
+          Production
         </button>
-      </div>
+      </nav>
 
       <AppModal
         :open="showProductForm"
@@ -804,23 +874,43 @@ async function cancelProductionRecord(prod: ProductionRecord) {
         <p v-if="productionSuccess" class="form-success">{{ productionSuccess }}</p>
       </AppModal>
 
-      <section v-if="data?.products.length" class="panel" style="margin-bottom: 1.25rem">
+      <div
+        v-show="activeTab === 'catalogue'"
+        class="page-tab-panel"
+        role="tabpanel"
+        aria-label="Catalogue"
+      >
+        <div class="stock-actions">
+          <button
+            type="button"
+            class="btn btn--primary"
+            @click="openProductForm"
+          >
+            + Enregistrer un produit
+          </button>
+        </div>
+
+        <section v-if="data?.products.length" class="panel" style="margin-bottom: 1.25rem">
         <div class="panel__header-row">
           <h2 class="panel__title">Catalogue produits</h2>
-          <div class="stock-actions" style="margin-bottom: 0">
+          <div class="stock-toggle-group">
             <button
               type="button"
-              class="btn btn--ghost btn--sm"
+              class="stock-toggle-btn stock-toggle-btn--collapse"
+              aria-label="Réduire"
+              title="Réduire"
               @click="collapseAllProducts"
             >
-              Reduire
+              −
             </button>
             <button
               type="button"
-              class="btn btn--ghost btn--sm"
+              class="stock-toggle-btn stock-toggle-btn--expand"
+              aria-label="Étendre"
+              title="Étendre"
               @click="expandAllProducts"
             >
-              Etendre
+              +
             </button>
           </div>
         </div>
@@ -915,25 +1005,29 @@ async function cancelProductionRecord(prod: ProductionRecord) {
             </div>
           </article>
         </div>
-      </section>
+        </section>
 
-      <section class="panel">
+        <section class="panel">
         <div class="panel__header-row">
           <h2 class="panel__title">Inventaire (tableau)</h2>
-          <div class="stock-actions" style="margin-bottom: 0">
+          <div class="stock-toggle-group">
             <button
               type="button"
-              class="btn btn--ghost btn--sm"
+              class="stock-toggle-btn stock-toggle-btn--collapse"
+              aria-label="Réduire"
+              title="Réduire"
               @click="isInventoryCollapsed = true"
             >
-              Reduire
+              −
             </button>
             <button
               type="button"
-              class="btn btn--ghost btn--sm"
+              class="stock-toggle-btn stock-toggle-btn--expand"
+              aria-label="Étendre"
+              title="Étendre"
               @click="isInventoryCollapsed = false"
             >
-              Etendre
+              +
             </button>
           </div>
         </div>
@@ -1067,13 +1161,58 @@ async function cancelProductionRecord(prod: ProductionRecord) {
         </div>
         <EmptyState
           v-else
-          message="Aucun produit — utilise le formulaire ci-dessus pour créer ta première fiche."
+          message="Aucun produit — utilise le bouton ci-dessus pour créer ta première fiche."
         />
-      </section>
+        </section>
+      </div>
 
-      <section class="panel" style="margin-top: 1.25rem">
-        <h2 class="panel__title">Historique des productions</h2>
-        <div v-if="data?.recentProductions.length" class="table-wrap">
+      <div
+        v-show="activeTab === 'production'"
+        class="page-tab-panel"
+        role="tabpanel"
+        aria-label="Production"
+      >
+        <div class="stock-actions">
+          <button
+            type="button"
+            class="btn btn--primary"
+            @click="openProductionForm"
+          >
+            + Noter une production
+          </button>
+        </div>
+
+        <section class="panel">
+        <div class="panel__header-row">
+          <h2 class="panel__title">Historique des productions</h2>
+          <div
+            v-if="data?.recentProductions.length"
+            class="stock-toggle-group"
+          >
+            <button
+              type="button"
+              class="stock-toggle-btn stock-toggle-btn--collapse"
+              aria-label="Réduire"
+              title="Réduire"
+              @click="isProductionHistoryCollapsed = true"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              class="stock-toggle-btn stock-toggle-btn--expand"
+              aria-label="Étendre"
+              title="Étendre"
+              @click="isProductionHistoryCollapsed = false"
+            >
+              +
+            </button>
+          </div>
+        </div>
+        <div
+          v-if="data?.recentProductions.length && !isProductionHistoryCollapsed"
+          class="table-wrap"
+        >
           <table class="table">
             <thead>
               <tr>
@@ -1123,11 +1262,62 @@ async function cancelProductionRecord(prod: ProductionRecord) {
             </tbody>
           </table>
         </div>
+        <div
+          v-else-if="data?.recentProductions.length && isProductionHistoryCollapsed"
+          class="table-wrap"
+        >
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Produit</th>
+                <th>Format</th>
+                <th>Quantité</th>
+                <th>Notes</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="firstProduction">
+                <td>{{ new Date(firstProduction.producedAt).toLocaleDateString("fr-FR") }}</td>
+                <td>{{ firstProduction.productName }}</td>
+                <td>
+                  <span
+                    class="volume-badge"
+                    :class="volumeClass(firstProduction.volume)"
+                  >
+                    {{ firstProduction.volume }}
+                  </span>
+                </td>
+                <td>+{{ firstProduction.quantity }}</td>
+                <td>{{ firstProduction.notes || "—" }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    @click="startEditProduction(firstProduction)"
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    :disabled="deletingProductionId === firstProduction.id"
+                    @click="cancelProductionRecord(firstProduction)"
+                  >
+                    {{ deletingProductionId === firstProduction.id ? "Annulation…" : "Annuler" }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <EmptyState
           v-else
           message="Aucune production enregistrée."
         />
-      </section>
+        </section>
+      </div>
     </template>
   </div>
 </template>
