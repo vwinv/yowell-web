@@ -8,11 +8,15 @@ import {
   saleBottleCount,
 } from "@yowell/shared";
 
-const props = defineProps<{
-  sale: Sale;
-  clients: { id: string; name: string }[];
-  products: JuiceProduct[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    sale: Sale;
+    clients: { id: string; name: string }[];
+    products: JuiceProduct[];
+    readonly?: boolean;
+  }>(),
+  { readonly: false },
+);
 
 const emit = defineEmits<{
   success: [];
@@ -131,6 +135,7 @@ function removeLine(index: number) {
 }
 
 async function submit() {
+  if (props.readonly) return;
   error.value = "";
   success.value = "";
 
@@ -194,6 +199,7 @@ async function submit() {
 
 <template>
   <form @submit.prevent="submit">
+    <fieldset class="form-fieldset" :disabled="readonly">
     <div class="form-grid">
       <div class="form-field form-field--wide">
         <label for="edit-sale-client">Client *</label>
@@ -343,5 +349,15 @@ async function submit() {
 
     <p v-if="error" class="form-error">{{ error }}</p>
     <p v-if="success" class="form-success">{{ success }}</p>
+    </fieldset>
   </form>
 </template>
+
+<style scoped>
+.form-fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: contents;
+}
+</style>

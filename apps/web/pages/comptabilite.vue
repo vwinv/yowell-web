@@ -2,6 +2,8 @@
 import type { AccountingEntry, AccountingOverview } from "@yowell/shared";
 import { formatCfa, paymentChannelLabel } from "@yowell/shared";
 
+const { canWrite, readOnly } = useModulePermission("comptabilite");
+
 const { data, pending, refresh } = await useApiFetch<AccountingOverview>(
   useApiUrl("/accounting/overview"),
   { key: "accounting-overview" },
@@ -64,6 +66,7 @@ watch(
 );
 
 async function saveChannelBalances() {
+  if (!canWrite.value) return;
   const cash = Number(cashOpening.value);
   const om = Number(omOpening.value);
   const wave = Number(waveOpening.value);
@@ -82,6 +85,7 @@ async function saveChannelBalances() {
 }
 
 async function removeManual(entry: AccountingEntry) {
+  if (!canWrite.value) return;
   if (entry.source !== "manual" || !entry.sourceId) return;
   if (!confirm(`Supprimer l'écriture « ${entry.label} » ?`)) return;
   await apiFetch(useApiUrl(`/accounting/entries/${entry.sourceId}`), {
@@ -101,6 +105,8 @@ async function removeManual(entry: AccountingEntry) {
     <p v-if="pending" class="loading">Chargement de la comptabilité</p>
 
     <template v-else>
+      <ReadOnlyBanner :show="readOnly" />
+
       <div class="stats-grid stats-grid--4">
         <StatCard
           label="Cash"
@@ -150,6 +156,7 @@ async function removeManual(entry: AccountingEntry) {
         <button
           type="button"
           class="btn btn--secondary"
+          :disabled="readOnly"
           @click="showCaisseForm = true"
         >
           Mettre à jour les soldes d'ouverture
@@ -165,6 +172,7 @@ async function removeManual(entry: AccountingEntry) {
           Montants déjà disponibles au démarrage du suivi (avant les opérations enregistrées).
         </p>
         <form class="form-grid" @submit.prevent="saveChannelBalances">
+          <fieldset :disabled="readOnly" class="form-fieldset-inline">
           <div class="form-field">
             <label for="opening-cash">Cash (FCFA)</label>
             <input
@@ -199,10 +207,11 @@ async function removeManual(entry: AccountingEntry) {
             />
           </div>
           <div class="form-actions form-field--wide">
-            <button type="submit" class="btn btn--primary" :disabled="savingCaisse">
+            <button type="submit" class="btn btn--primary" :disabled="readOnly || savingCaisse">
               {{ savingCaisse ? "Enregistrement…" : "Enregistrer" }}
             </button>
           </div>
+          </fieldset>
         </form>
       </AppModal>
 
@@ -210,6 +219,7 @@ async function removeManual(entry: AccountingEntry) {
         <button
           type="button"
           class="btn btn--primary"
+          :disabled="readOnly"
           @click="showForm = true"
         >
           + Saisie manuelle
@@ -221,7 +231,10 @@ async function removeManual(entry: AccountingEntry) {
         title="Revenu ou dépense manuelle"
         @close="showForm = false"
       >
-        <ManualEntryFormLazy @success="refresh(); showForm = false" />
+        <ManualEntryFormLazy
+          :readonly="readOnly"
+          @success="refresh(); showForm = false"
+        />
       </AppModal>
 
       <section class="panel">
@@ -274,6 +287,7 @@ async function removeManual(entry: AccountingEntry) {
                     v-if="entry.source === 'manual'"
                     type="button"
                     class="btn btn--ghost btn--sm"
+                    :disabled="readOnly"
                     @click="removeManual(entry)"
                   >
                     Supprimer

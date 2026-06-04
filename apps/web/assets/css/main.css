@@ -339,20 +339,6 @@ a {
   margin-top: 0.5rem;
 }
 
-.login-card__hint {
-  margin: 1.25rem 0 0;
-  font-size: 0.78rem;
-  color: var(--muted);
-  text-align: center;
-}
-
-.login-card__hint code {
-  font-size: 0.76rem;
-  background: var(--bg);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-}
-
 /* ——— Main ——— */
 
 .main {

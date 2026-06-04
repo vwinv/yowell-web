@@ -2,6 +2,8 @@
 import type { ClientsOverview } from "@yowell/shared";
 import { formatCfa } from "@yowell/shared";
 
+const { canWrite, readOnly } = useModulePermission("vente_clients");
+
 const { data, pending, refresh } = await useApiFetch<ClientsOverview>(
   useApiUrl("/clients/overview"),
   { key: "clients-overview" },
@@ -13,6 +15,7 @@ const ClientFormLazy = defineAsyncComponent(
 );
 
 async function removeClient(id: string, name: string) {
+  if (!canWrite.value) return;
   if (!confirm(`Supprimer le client « ${name} » ?`)) return;
   await apiFetch(useApiUrl(`/clients/${id}`), { method: "DELETE" });
   await refresh();
@@ -29,6 +32,8 @@ async function removeClient(id: string, name: string) {
     <p v-if="pending" class="loading">Chargement des clients</p>
 
     <template v-else>
+      <ReadOnlyBanner :show="readOnly" />
+
       <div class="stats-grid">
         <StatCard
           label="Clients enregistrés"
@@ -48,6 +53,7 @@ async function removeClient(id: string, name: string) {
         <button
           type="button"
           class="btn btn--primary"
+          :disabled="readOnly"
           @click="showClientForm = true"
         >
           + Nouveau client
@@ -62,7 +68,10 @@ async function removeClient(id: string, name: string) {
         title="Nouveau client"
         @close="showClientForm = false"
       >
-        <ClientFormLazy @success="refresh(); showClientForm = false" />
+        <ClientFormLazy
+          :readonly="readOnly"
+          @success="refresh(); showClientForm = false"
+        />
       </AppModal>
 
       <section class="panel">
@@ -97,6 +106,7 @@ async function removeClient(id: string, name: string) {
                   <button
                     type="button"
                     class="btn btn--ghost"
+                    :disabled="readOnly"
                     @click="removeClient(c.id, c.name)"
                   >
                     Supprimer

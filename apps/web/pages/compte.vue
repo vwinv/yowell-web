@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user } = useAuth();
+const { user, permissionSummary } = useAuth();
 
 const currentPassword = ref("");
 const newPassword = ref("");
@@ -84,8 +84,8 @@ async function submit() {
             <dd>{{ user.email }}</dd>
           </div>
           <div class="account-info__row">
-            <dt>Role</dt>
-            <dd>{{ user.role === "admin" ? "Administrateur" : "Equipe" }}</dd>
+            <dt>Rôle / droits</dt>
+            <dd>{{ permissionSummary }}</dd>
           </div>
         </dl>
       </section>

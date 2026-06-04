@@ -68,10 +68,6 @@ async function submit() {
           {{ submitting ? "Connexion…" : "Se connecter" }}
         </button>
       </form>
-
-      <p class="login-card__hint">
-        Premier démarrage : <code>admin@yowell.fr</code> / <code>admin123</code>
-      </p>
     </div>
   </div>
 </template>

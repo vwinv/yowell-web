@@ -7,6 +7,8 @@ import type {
 } from "@yowell/shared";
 import { deliveryRemainingCounts, formatCfa, paymentChannelLabel } from "@yowell/shared";
 
+const { canWrite, readOnly } = useModulePermission("course");
+
 const { data, pending, refresh } = await useApiFetch<DeliveriesOverview>(
   useApiUrl("/deliveries/overview"),
   { key: "deliveries-overview" },
@@ -41,12 +43,14 @@ function itemKey(runId: string, itemId: string) {
 }
 
 async function removeRun(id: string, dateLabel: string) {
+  if (!canWrite.value) return;
   if (!confirm(`Supprimer la course du ${dateLabel} ?`)) return;
   await apiFetch(useApiUrl(`/deliveries/${id}`), { method: "DELETE" });
   await refresh();
 }
 
 function startEditRun(run: DeliveryRun) {
+  if (!canWrite.value) return;
   editingRunId.value = run.id;
   showForm.value = false;
 }
@@ -68,6 +72,7 @@ function runItemFromRemaining(entry: DeliveryRemainingItem) {
 }
 
 function openRemainingEditor(runId: string, item: DeliveryRunLine) {
+  if (!canWrite.value) return;
   const key = itemKey(runId, item.id);
   editingRemaining.value = key;
   remainingDrafts.value[key] = item.remainingNote ?? "";
@@ -75,6 +80,7 @@ function openRemainingEditor(runId: string, item: DeliveryRunLine) {
 }
 
 function openRemainingEditorFromList(entry: DeliveryRemainingItem) {
+  if (!canWrite.value) return;
   const found = runItemFromRemaining(entry);
   if (found) {
     openRemainingEditor(found.run.id, found.item);
@@ -107,6 +113,7 @@ async function persistRemaining(
   remainingNote?: string,
   initialRemainingStock?: number,
 ) {
+  if (!canWrite.value) return;
   const key = itemKey(runId, item.id);
   savingRemaining.value = key;
 
@@ -200,6 +207,9 @@ function isEditing(runId: string, item: DeliveryRunLine) {
     <p v-if="pending" class="loading">Chargement des courses</p>
 
     <template v-else>
+      <div :class="{ 'page--read-only': readOnly }">
+      <ReadOnlyBanner :show="readOnly" />
+
       <div class="stats-grid">
         <StatCard
           label="Courses ce mois"
@@ -267,7 +277,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                       <button
                         type="button"
                         class="btn btn--ghost remaining-btn"
-                        :disabled="savingRemaining === itemKey(entry.runId, entry.itemId)"
+                        :disabled="readOnly || savingRemaining === itemKey(entry.runId, entry.itemId)"
                         @click="markUsedFromList(entry)"
                       >
                         Plus de reste
@@ -309,7 +319,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                       <button
                         type="button"
                         class="btn btn--primary remaining-btn"
-                        :disabled="savingRemaining === itemKey(entry.runId, entry.itemId)"
+                        :disabled="readOnly || savingRemaining === itemKey(entry.runId, entry.itemId)"
                         @click="saveRemainingNoteFromList(entry)"
                       >
                         Enregistrer
@@ -442,7 +452,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                             <button
                               type="button"
                               class="btn btn--ghost remaining-btn"
-                              :disabled="savingRemaining === itemKey(run.id, item.id)"
+                              :disabled="readOnly || savingRemaining === itemKey(run.id, item.id)"
                               @click="markNoRemaining(run.id, item)"
                             >
                               Plus de reste
@@ -479,7 +489,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                             <button
                               type="button"
                               class="btn btn--primary remaining-btn"
-                              :disabled="savingRemaining === itemKey(run.id, item.id)"
+                              :disabled="readOnly || savingRemaining === itemKey(run.id, item.id)"
                               @click="saveRemainingNote(run.id, item)"
                             >
                               Enregistrer
@@ -495,7 +505,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                               v-if="item.hasRemaining !== true"
                               type="button"
                               class="btn btn--ghost remaining-btn"
-                              :disabled="savingRemaining === itemKey(run.id, item.id)"
+                              :disabled="readOnly || savingRemaining === itemKey(run.id, item.id)"
                               @click="markNoRemaining(run.id, item)"
                             >
                               Rien ne reste
@@ -519,7 +529,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                           <button
                             type="button"
                             class="btn btn--ghost remaining-btn remaining-btn--active-no"
-                            :disabled="savingRemaining === itemKey(run.id, item.id)"
+                            :disabled="readOnly || savingRemaining === itemKey(run.id, item.id)"
                             @click="markNoRemaining(run.id, item)"
                           >
                             Rien ne reste
@@ -572,6 +582,18 @@ function isEditing(runId: string, item: DeliveryRunLine) {
           message="Aucune course — enregistre ta première tournée avec le bouton ci-dessus."
         />
       </section>
+      </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.page--read-only :deep(button),
+.page--read-only :deep(input),
+.page--read-only :deep(select),
+.page--read-only :deep(textarea) {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+</style>

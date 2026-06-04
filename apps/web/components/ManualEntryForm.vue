@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import type { CreateManualAccountingEntryInput } from "@yowell/shared";
 
+const props = withDefaults(
+  defineProps<{
+    readonly?: boolean;
+  }>(),
+  { readonly: false },
+);
+
 const emit = defineEmits<{
   success: [];
 }>();
@@ -22,6 +29,7 @@ function resetForm() {
 }
 
 async function submit() {
+  if (props.readonly) return;
   error.value = "";
   success.value = "";
 
@@ -62,6 +70,7 @@ async function submit() {
 
 <template>
   <form class="form-grid" @submit.prevent="submit">
+    <fieldset class="form-fieldset" :disabled="readonly">
     <div class="form-field">
       <label for="entry-date">Date</label>
       <input id="entry-date" v-model="date" type="date" required />
@@ -104,5 +113,15 @@ async function submit() {
         {{ submitting ? "Enregistrement…" : "Enregistrer" }}
       </button>
     </div>
+    </fieldset>
   </form>
 </template>
+
+<style scoped>
+.form-fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: contents;
+}
+</style>

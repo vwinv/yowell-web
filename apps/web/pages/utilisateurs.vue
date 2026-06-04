@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { AppUser, UpdateUserInput } from "@yowell/shared";
+import type { AppModulePermission, AppUser, UpdateUserInput } from "@yowell/shared";
+import { formatPermissionList } from "@yowell/shared";
 
 definePageMeta({
   middleware: ["admin"],
@@ -19,6 +20,7 @@ const editForm = reactive({
   name: "",
   email: "",
   role: "staff" as AppUser["role"],
+  permissions: [] as AppModulePermission[],
   password: "",
 });
 
@@ -26,8 +28,9 @@ const UserFormLazy = defineAsyncComponent(
   () => import("~/components/UserForm.vue"),
 );
 
-function roleLabel(role: AppUser["role"]) {
-  return role === "admin" ? "Administrateur" : "Utilisateur";
+function roleLabel(user: AppUser) {
+  if (user.role === "admin") return "Administrateur";
+  return formatPermissionList(user.permissions);
 }
 
 async function deactivateUser(user: AppUser) {
@@ -42,6 +45,7 @@ function startEditUser(user: AppUser) {
   editForm.name = user.name;
   editForm.email = user.email;
   editForm.role = user.role;
+  editForm.permissions = [...user.permissions];
   editForm.password = "";
   editError.value = "";
   editSuccess.value = "";
@@ -76,6 +80,9 @@ async function submitEditUser() {
       role: editForm.role,
     };
     if (editForm.password) body.password = editForm.password;
+    if (editForm.role === "staff") {
+      body.permissions = [...editForm.permissions];
+    }
 
     await apiFetch(useApiUrl(`/users/${editingUserId.value}`), {
       method: "PATCH",
@@ -145,12 +152,18 @@ async function submitEditUser() {
             />
           </div>
           <div class="form-field">
-            <label for="edit-user-role">Role</label>
+            <label for="edit-user-role">Type de compte</label>
             <select id="edit-user-role" v-model="editForm.role">
               <option value="staff">Utilisateur</option>
               <option value="admin">Administrateur</option>
             </select>
           </div>
+
+          <PermissionCheckboxes
+            v-if="editForm.role === 'staff'"
+            v-model="editForm.permissions"
+            class="form-field--wide"
+          />
 
           <p v-if="editError" class="form-error">{{ editError }}</p>
           <p v-if="editSuccess" class="form-success">{{ editSuccess }}</p>
@@ -174,7 +187,7 @@ async function submitEditUser() {
               <tr>
                 <th>Nom</th>
                 <th>E-mail</th>
-                <th>Rôle</th>
+                <th>Rôle / droits</th>
                 <th>Créé le</th>
                 <th />
               </tr>
@@ -188,7 +201,7 @@ async function submitEditUser() {
                     class="badge"
                     :class="{ 'badge--paid': user.role === 'admin' }"
                   >
-                    {{ roleLabel(user.role) }}
+                    {{ roleLabel(user) }}
                   </span>
                 </td>
                 <td>

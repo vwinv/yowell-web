@@ -1,4 +1,11 @@
 <script setup lang="ts">
+const props = withDefaults(
+  defineProps<{
+    readonly?: boolean;
+  }>(),
+  { readonly: false },
+);
+
 const emit = defineEmits<{
   success: [];
 }>();
@@ -22,6 +29,7 @@ function resetForm() {
 }
 
 async function submit() {
+  if (props.readonly) return;
   error.value = "";
   success.value = "";
 
@@ -55,6 +63,7 @@ async function submit() {
 
 <template>
   <form class="form-grid" @submit.prevent="submit">
+    <fieldset class="form-fieldset" :disabled="readonly">
     <div class="form-field form-field--wide">
       <label for="client-name">Nom *</label>
       <input
@@ -96,5 +105,15 @@ async function submit() {
     </div>
     <p v-if="error" class="form-error form-field--wide">{{ error }}</p>
     <p v-if="success" class="form-success form-field--wide">{{ success }}</p>
+    </fieldset>
   </form>
 </template>
+
+<style scoped>
+.form-fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: contents;
+}
+</style>

@@ -17,12 +17,16 @@ type OrderLine = {
   quantity: number;
 };
 
-const props = defineProps<{
-  clients: { id: string; name: string }[];
-  products: JuiceProduct[];
-  /** "quote" = devis sans vérification de stock */
-  mode?: "sale" | "quote";
-}>();
+const props = withDefaults(
+  defineProps<{
+    clients: { id: string; name: string }[];
+    products: JuiceProduct[];
+    /** "quote" = devis sans vérification de stock */
+    mode?: "sale" | "quote";
+    readonly?: boolean;
+  }>(),
+  { mode: "sale", readonly: false },
+);
 
 const isQuote = computed(() => props.mode === "quote");
 
@@ -146,6 +150,7 @@ function resetForm() {
 }
 
 async function submit() {
+  if (props.readonly) return;
   error.value = "";
   success.value = "";
 
@@ -212,6 +217,7 @@ async function submit() {
 
 <template>
   <form @submit.prevent="submit">
+    <fieldset class="form-fieldset" :disabled="readonly">
     <div class="form-grid">
       <div class="form-field form-field--wide">
         <label for="sale-client">Client *</label>
@@ -344,5 +350,15 @@ async function submit() {
 
     <p v-if="error" class="form-error">{{ error }}</p>
     <p v-if="success" class="form-success">{{ success }}</p>
+    </fieldset>
   </form>
 </template>
+
+<style scoped>
+.form-fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: contents;
+}
+</style>

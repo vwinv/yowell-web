@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CreateUserInput, UserRole } from "@yowell/shared";
+import type { AppModulePermission, CreateUserInput, UserRole } from "@yowell/shared";
 
 const emit = defineEmits<{
   success: [];
@@ -9,6 +9,7 @@ const email = ref("");
 const name = ref("");
 const password = ref("");
 const role = ref<UserRole>("staff");
+const permissions = ref<AppModulePermission[]>([]);
 
 const submitting = ref(false);
 const error = ref("");
@@ -19,6 +20,7 @@ function resetForm() {
   name.value = "";
   password.value = "";
   role.value = "staff";
+  permissions.value = [];
 }
 
 async function submit() {
@@ -32,14 +34,19 @@ async function submit() {
 
   submitting.value = true;
   try {
+    const body: CreateUserInput = {
+      email: email.value.trim(),
+      name: name.value.trim(),
+      password: password.value,
+      role: role.value,
+    };
+    if (role.value === "staff") {
+      body.permissions = [...permissions.value];
+    }
+
     await apiFetch(useApiUrl("/users"), {
       method: "POST",
-      body: {
-        email: email.value.trim(),
-        name: name.value.trim(),
-        password: password.value,
-        role: role.value,
-      } satisfies CreateUserInput,
+      body,
     });
     success.value = "Utilisateur créé.";
     resetForm();
@@ -73,12 +80,18 @@ async function submit() {
       />
     </div>
     <div class="form-field">
-      <label for="user-role">Rôle</label>
+      <label for="user-role">Type de compte</label>
       <select id="user-role" v-model="role">
         <option value="staff">Utilisateur</option>
         <option value="admin">Administrateur</option>
       </select>
     </div>
+
+    <PermissionCheckboxes
+      v-if="role === 'staff'"
+      v-model="permissions"
+      class="form-field--wide"
+    />
 
     <p v-if="error" class="form-message form-message--error">{{ error }}</p>
     <p v-if="success" class="form-message form-message--success">{{ success }}</p>

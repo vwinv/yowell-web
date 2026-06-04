@@ -9,6 +9,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AuthModule } from "./auth/auth.module";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
+import { PermissionsGuard } from "./auth/permissions.guard";
 import { ClientsModule } from "./clients/clients.module";
 import { DeliveriesModule } from "./deliveries/deliveries.module";
 import { SalesModule } from "./sales/sales.module";
@@ -35,6 +36,7 @@ import { UsersModule } from "./users/users.module";
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_INTERCEPTOR, useClass: ActivityLoggingInterceptor },
   ],
 })

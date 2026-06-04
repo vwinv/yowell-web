@@ -8,7 +8,11 @@ import type { User as PrismaUser } from "@prisma/client";
 import type { AppUser, CreateUserInput, UpdateUserInput } from "@yowell/shared";
 import * as bcrypt from "bcrypt";
 
-import { mapUser, toPrismaUserRole } from "../prisma/prisma.mappers";
+import {
+  mapUser,
+  toPrismaAppModulePermissions,
+  toPrismaUserRole,
+} from "../prisma/prisma.mappers";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -85,12 +89,17 @@ export class UsersService implements OnModuleInit {
       throw new BadRequestException("Un compte existe déjà avec cet e-mail.");
     }
 
+    const role = toPrismaUserRole(input.role ?? "staff");
     const user = await this.prisma.user.create({
       data: {
         email,
         name: input.name.trim(),
         passwordHash: await bcrypt.hash(input.password, 10),
-        role: toPrismaUserRole(input.role ?? "staff"),
+        role,
+        permissions:
+          role === toPrismaUserRole("admin")
+            ? []
+            : toPrismaAppModulePermissions(input.permissions),
         active: true,
       },
     });
@@ -113,6 +122,7 @@ export class UsersService implements OnModuleInit {
       name?: string;
       passwordHash?: string;
       role?: ReturnType<typeof toPrismaUserRole>;
+      permissions?: ReturnType<typeof toPrismaAppModulePermissions>;
     } = {};
 
     if (email) data.email = email;
@@ -120,8 +130,23 @@ export class UsersService implements OnModuleInit {
     if (input.password) {
       data.passwordHash = await bcrypt.hash(input.password, 10);
     }
+
+    const nextRole = input.role
+      ? toPrismaUserRole(input.role)
+      : existing.role;
+
     if (input.role) {
-      data.role = toPrismaUserRole(input.role);
+      data.role = nextRole;
+      if (nextRole === toPrismaUserRole("admin")) {
+        data.permissions = [];
+      }
+    }
+
+    if (input.permissions !== undefined) {
+      data.permissions =
+        nextRole === toPrismaUserRole("admin")
+          ? []
+          : toPrismaAppModulePermissions(input.permissions);
     }
 
     const updated = await this.prisma.user.update({

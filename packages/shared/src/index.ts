@@ -7,11 +7,26 @@ export type HealthStatus = {
 /** Utilisateurs administration */
 export type UserRole = "admin" | "staff";
 
+export type {
+  AppModulePermission,
+  PermissionUser,
+} from "./permissions";
+export {
+  ALL_MODULE_PERMISSIONS,
+  formatPermissionList,
+  MODULE_PERMISSION_OPTIONS,
+  permissionForApiPath,
+  permissionForRoute,
+  permissionLabel,
+  userCanMutate,
+} from "./permissions";
+
 export type AppUser = {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  permissions: import("./permissions").AppModulePermission[];
   active: boolean;
   createdAt: string;
 };
@@ -21,6 +36,7 @@ export type CreateUserInput = {
   name: string;
   password: string;
   role?: UserRole;
+  permissions?: import("./permissions").AppModulePermission[];
 };
 
 export type UpdateUserInput = {
@@ -28,6 +44,7 @@ export type UpdateUserInput = {
   name?: string;
   password?: string;
   role?: UserRole;
+  permissions?: import("./permissions").AppModulePermission[];
 };
 
 export type LoginInput = {

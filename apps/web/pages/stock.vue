@@ -10,6 +10,8 @@ import type {
 } from "@yowell/shared";
 import { formatCfa, productTotalStock } from "@yowell/shared";
 
+const { readOnly } = useModulePermission("stock");
+
 const { data, pending, refresh } = await useApiFetch<StockOverview>(
   useApiUrl("/stock/overview"),
   { key: "stock-overview" },
@@ -488,6 +490,9 @@ async function cancelProductionRecord(prod: ProductionRecord) {
     <p v-if="pending" class="loading">Chargement du stock</p>
 
     <template v-else>
+      <div :class="{ 'page--read-only': readOnly }">
+      <ReadOnlyBanner :show="readOnly" />
+
       <section class="panel stock-snapshot" aria-readonly="true">
         <div class="panel__header-row stock-snapshot__header">
           <div>
@@ -1353,6 +1358,18 @@ async function cancelProductionRecord(prod: ProductionRecord) {
         />
         </section>
       </div>
+      </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.page--read-only :deep(button),
+.page--read-only :deep(input),
+.page--read-only :deep(select),
+.page--read-only :deep(textarea) {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+</style>

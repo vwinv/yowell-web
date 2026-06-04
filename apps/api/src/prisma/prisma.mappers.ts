@@ -5,10 +5,12 @@ import {
   PaymentChannel as PrismaPaymentChannel,
   SalePaymentStatus as PrismaSalePaymentStatus,
   SaleKind as PrismaSaleKind,
+  AppModulePermission as PrismaAppModulePermission,
   UserRole as PrismaUserRole,
 } from "@prisma/client";
 import type {
   ActivityLogEntry,
+  AppModulePermission,
   AppUser,
   Client,
   DeliveryRun,
@@ -54,6 +56,42 @@ export function toPrismaUserRole(role: UserRole): PrismaUserRole {
 
 export function toSharedUserRole(role: PrismaUserRole): UserRole {
   return role === PrismaUserRole.ADMIN ? "admin" : "staff";
+}
+
+export function toPrismaAppModulePermission(
+  permission: AppModulePermission,
+): PrismaAppModulePermission {
+  const map: Record<AppModulePermission, PrismaAppModulePermission> = {
+    comptabilite: PrismaAppModulePermission.COMPTABILITE,
+    stock: PrismaAppModulePermission.STOCK,
+    course: PrismaAppModulePermission.COURSE,
+    vente_clients: PrismaAppModulePermission.VENTE_CLIENTS,
+  };
+  return map[permission];
+}
+
+export function toSharedAppModulePermission(
+  permission: PrismaAppModulePermission,
+): AppModulePermission {
+  const map: Record<PrismaAppModulePermission, AppModulePermission> = {
+    [PrismaAppModulePermission.COMPTABILITE]: "comptabilite",
+    [PrismaAppModulePermission.STOCK]: "stock",
+    [PrismaAppModulePermission.COURSE]: "course",
+    [PrismaAppModulePermission.VENTE_CLIENTS]: "vente_clients",
+  };
+  return map[permission];
+}
+
+export function toPrismaAppModulePermissions(
+  permissions: AppModulePermission[] | undefined,
+): PrismaAppModulePermission[] {
+  return (permissions ?? []).map(toPrismaAppModulePermission);
+}
+
+export function toSharedAppModulePermissions(
+  permissions: PrismaAppModulePermission[],
+): AppModulePermission[] {
+  return permissions.map(toSharedAppModulePermission);
 }
 
 export function toPrismaJuiceVolume(volume: JuiceVolume): PrismaJuiceVolume {
@@ -132,6 +170,7 @@ export function mapUser(user: PrismaUserRecord): AppUser {
     email: user.email,
     name: user.name,
     role: toSharedUserRole(user.role),
+    permissions: toSharedAppModulePermissions(user.permissions),
     active: user.active,
     createdAt: dateToIso(user.createdAt),
   };

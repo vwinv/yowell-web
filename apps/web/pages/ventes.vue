@@ -8,6 +8,8 @@ import type {
 } from "@yowell/shared";
 import { formatCfa, PAYMENT_CHANNEL_OPTIONS, paymentChannelLabel } from "@yowell/shared";
 
+const { canWrite, readOnly } = useModulePermission("vente_clients");
+
 const [
   { data, pending, refresh },
   { data: clientsData },
@@ -59,18 +61,21 @@ async function onQuoteSuccess() {
 }
 
 function openSaleForm() {
+  if (!canWrite.value) return;
   showQuoteForm.value = false;
   editingSaleId.value = null;
   showSaleForm.value = true;
 }
 
 function openQuoteForm() {
+  if (!canWrite.value) return;
   showSaleForm.value = false;
   editingSaleId.value = null;
   showQuoteForm.value = true;
 }
 
 function startEditSale(sale: Sale) {
+  if (!canWrite.value) return;
   editingSaleId.value = sale.id;
   showSaleForm.value = false;
   showQuoteForm.value = false;
@@ -100,7 +105,7 @@ function paymentChannelForSale(sale: Sale): "cash" | "om" | "wave" {
 }
 
 async function convertToSale(sale: Sale) {
-  if (sale.kind !== "quote") return;
+  if (!canWrite.value || sale.kind !== "quote") return;
   convertingId.value = sale.id;
   try {
     await apiFetch(useApiUrl(`/sales/${sale.id}/convert-to-sale`), {
@@ -126,7 +131,7 @@ function paymentLabel(status: SalePaymentStatus) {
 }
 
 async function markAsPaid(sale: Sale) {
-  if (sale.paymentStatus === "paid") return;
+  if (!canWrite.value || sale.paymentStatus === "paid") return;
   updatingPaymentId.value = sale.id;
   try {
     await apiFetch(useApiUrl(`/sales/${sale.id}/payment-status`), {
@@ -147,6 +152,7 @@ async function markAsPaid(sale: Sale) {
 }
 
 async function removeSale(sale: Sale) {
+  if (!canWrite.value) return;
   const kindLabel = sale.kind === "quote" ? "devis" : "vente";
   const stockHint =
     sale.kind === "quote" ? "" : " Le stock sera rétabli.";
@@ -189,6 +195,8 @@ async function removeSale(sale: Sale) {
     <p v-if="pending" class="loading">Chargement des ventes</p>
 
     <template v-else>
+      <ReadOnlyBanner :show="readOnly" />
+
       <div class="stats-grid">
         <StatCard
           label="Ventes aujourd'hui"
@@ -214,6 +222,7 @@ async function removeSale(sale: Sale) {
         <button
           type="button"
           class="btn btn--primary"
+          :disabled="readOnly"
           @click="openSaleForm()"
         >
           + Enregistrer une vente
@@ -221,6 +230,7 @@ async function removeSale(sale: Sale) {
         <button
           type="button"
           class="btn btn--secondary"
+          :disabled="readOnly"
           @click="openQuoteForm()"
         >
           + Créer un devis
@@ -244,6 +254,7 @@ async function removeSale(sale: Sale) {
           :sale="editingSale"
           :clients="clientOptions"
           :products="products ?? []"
+          :readonly="readOnly"
           @success="onSaleEditSuccess"
           @cancel="cancelEditSale"
         />
@@ -268,6 +279,7 @@ async function removeSale(sale: Sale) {
           v-else
           :clients="clientOptions"
           :products="products ?? []"
+          :readonly="readOnly"
           @success="onSaleSuccess"
         />
       </AppModal>
@@ -304,6 +316,7 @@ async function removeSale(sale: Sale) {
           mode="quote"
           :clients="clientOptions"
           :products="products ?? []"
+          :readonly="readOnly"
           @success="onQuoteSuccess"
         />
       </AppModal>
@@ -369,7 +382,7 @@ async function removeSale(sale: Sale) {
                       v-if="sale.paymentStatus === 'unpaid'"
                       type="button"
                       class="btn btn--primary btn--sm payment-cell__action"
-                      :disabled="updatingPaymentId === sale.id"
+                      :disabled="readOnly || updatingPaymentId === sale.id"
                       @click="markAsPaid(sale)"
                     >
                       {{
@@ -383,7 +396,7 @@ async function removeSale(sale: Sale) {
                     v-if="sale.kind === 'quote'"
                     type="button"
                     class="btn btn--primary btn--sm payment-cell__action"
-                    :disabled="convertingId === sale.id"
+                    :disabled="readOnly || convertingId === sale.id"
                     @click="convertToSale(sale)"
                   >
                     {{
@@ -401,7 +414,7 @@ async function removeSale(sale: Sale) {
                     v-else-if="sale.kind !== 'quote' && sale.paymentStatus === 'unpaid'"
                     :value="paymentChannelForSale(sale)"
                     class="payment-channel-select"
-                    :disabled="updatingPaymentId === sale.id"
+                    :disabled="readOnly || updatingPaymentId === sale.id"
                     @change="pendingPaymentChannels[sale.id] = ($event.target as HTMLSelectElement).value as 'cash' | 'om' | 'wave'"
                   >
                     <option
@@ -420,6 +433,7 @@ async function removeSale(sale: Sale) {
                     type="button"
                     class="btn btn--ghost btn--sm"
                     style="margin-right: 0.35rem"
+                    :disabled="readOnly"
                     @click="startEditSale(sale)"
                   >
                     Modifier
@@ -442,7 +456,7 @@ async function removeSale(sale: Sale) {
                     type="button"
                     class="btn btn--ghost btn--sm"
                     style="margin-left: 0.35rem"
-                    :disabled="deletingId === sale.id"
+                    :disabled="readOnly || deletingId === sale.id"
                     @click="removeSale(sale)"
                   >
                     {{ deletingId === sale.id ? "…" : "Supprimer" }}

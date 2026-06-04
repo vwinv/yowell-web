@@ -1,4 +1,5 @@
 import type { AppUser, AuthResponse, LoginInput } from "@yowell/shared";
+import { formatPermissionList } from "@yowell/shared";
 
 export function useAuth() {
   const token = useAuthCookie();
@@ -6,6 +7,11 @@ export function useAuth() {
 
   const isAuthenticated = computed(() => Boolean(token.value));
   const isAdmin = computed(() => user.value?.role === "admin");
+  const permissionSummary = computed(() => {
+    if (!user.value) return "";
+    if (user.value.role === "admin") return "Administrateur";
+    return formatPermissionList(user.value.permissions);
+  });
 
   async function fetchMe() {
     if (!token.value) {
@@ -41,6 +47,7 @@ export function useAuth() {
     user,
     isAuthenticated,
     isAdmin,
+    permissionSummary,
     fetchMe,
     login,
     logout,

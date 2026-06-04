@@ -2,7 +2,7 @@
 import { navigation } from "~/constants/navigation";
 
 const route = useRoute();
-const { user, logout, isAdmin } = useAuth();
+const { user, logout, isAdmin, permissionSummary } = useAuth();
 
 const currentPage = computed(() =>
   navigation.find((item) => item.to === route.path),
@@ -24,7 +24,13 @@ const currentPage = computed(() =>
           </div>
           <div v-if="user" class="topbar__user">
             <span class="topbar__user-name">{{ user.name }}</span>
-            <span v-if="isAdmin" class="badge badge--paid">Admin</span>
+            <span
+              class="badge"
+              :class="{ 'badge--paid': isAdmin }"
+              :title="permissionSummary"
+            >
+              {{ permissionSummary }}
+            </span>
             <NuxtLink to="/compte" class="btn btn--ghost btn--sm">
               Mon compte
             </NuxtLink>
