@@ -90,6 +90,7 @@ async function onSaleEditSuccess() {
 }
 
 const convertingId = ref<string | null>(null);
+const deletingId = ref<string | null>(null);
 const updatingPaymentId = ref<string | null>(null);
 const pendingPaymentChannels = ref<Record<string, "cash" | "om" | "wave">>({});
 const { generatingId: generatingInvoiceId, downloadInvoice } = useSaleInvoice();
@@ -142,6 +143,38 @@ async function markAsPaid(sale: Sale) {
     ]);
   } finally {
     updatingPaymentId.value = null;
+  }
+}
+
+async function removeSale(sale: Sale) {
+  const kindLabel = sale.kind === "quote" ? "devis" : "vente";
+  const stockHint =
+    sale.kind === "quote" ? "" : " Le stock sera rétabli.";
+  if (
+    !confirm(
+      `Supprimer ce ${kindLabel} pour « ${sale.clientName} » ?${stockHint}`,
+    )
+  ) {
+    return;
+  }
+  deletingId.value = sale.id;
+  try {
+    await apiFetch(useApiUrl(`/sales/${sale.id}`), {
+      method: "DELETE",
+      autoReload: false,
+    });
+    if (editingSaleId.value === sale.id) {
+      editingSaleId.value = null;
+    }
+    await Promise.all([
+      refresh(),
+      refreshNuxtData("clients-overview"),
+      refreshNuxtData("accounting-overview"),
+      refreshNuxtData("products-for-sales"),
+      refreshNuxtData("stock-overview"),
+    ]);
+  } finally {
+    deletingId.value = null;
   }
 }
 </script>
@@ -404,6 +437,15 @@ async function markAsPaid(sale: Sale) {
                           ? "Devis"
                           : "Facture"
                     }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    style="margin-left: 0.35rem"
+                    :disabled="deletingId === sale.id"
+                    @click="removeSale(sale)"
+                  >
+                    {{ deletingId === sale.id ? "…" : "Supprimer" }}
                   </button>
                 </td>
               </tr>

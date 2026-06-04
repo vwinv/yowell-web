@@ -500,6 +500,38 @@ export class SalesService {
     });
   }
 
+  async delete(id: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.sale.findUnique({
+        where: { id },
+        include: { items: true },
+      });
+      if (!existing) {
+        throw new NotFoundException("Vente introuvable");
+      }
+
+      const isQuote = existing.kind === toPrismaSaleKind("quote");
+
+      if (!isQuote) {
+        for (const item of existing.items) {
+          await tx.productFormat.updateMany({
+            where: {
+              productId: item.productId,
+              volume: item.volume,
+            },
+            data: {
+              quantity: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+      }
+
+      await tx.sale.delete({ where: { id } });
+    });
+  }
+
   async updatePaymentStatus(
     id: string,
     input: UpdateSalePaymentInput,

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -44,6 +45,12 @@ export class SalesController {
   @Post(":id/convert-to-sale")
   convertToSale(@Param("id") id: string) {
     return this.salesService.convertToSale(id);
+  }
+
+  @Delete(":id")
+  async delete(@Param("id") id: string) {
+    await this.salesService.delete(id);
+    return { ok: true };
   }
 
   @Get(":id/invoice")
