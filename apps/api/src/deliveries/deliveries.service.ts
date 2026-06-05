@@ -73,12 +73,14 @@ export class DeliveriesService {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lineTotal: item.quantity * item.unitPrice,
+      paymentChannel: toPrismaPaymentChannel(item.paymentChannel),
     }));
     const fees = (input.fees ?? [])
       .filter((fee) => fee.label.trim() && fee.amount >= 0)
       .map((fee) => ({
         label: fee.label.trim(),
         amount: Math.round(fee.amount),
+        paymentChannel: toPrismaPaymentChannel(fee.paymentChannel),
       }));
 
     const run = await this.prisma.deliveryRun.create({
@@ -87,7 +89,6 @@ export class DeliveriesService {
         totalAmount:
           items.reduce((sum, item) => sum + item.lineTotal, 0) +
           fees.reduce((sum, fee) => sum + fee.amount, 0),
-        paymentChannel: toPrismaPaymentChannel(input.paymentChannel),
         items: {
           create: items,
         },
@@ -119,12 +120,14 @@ export class DeliveriesService {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lineTotal: item.quantity * item.unitPrice,
+      paymentChannel: toPrismaPaymentChannel(item.paymentChannel),
     }));
     const fees = (input.fees ?? [])
       .filter((fee) => fee.label.trim() && fee.amount >= 0)
       .map((fee) => ({
         label: fee.label.trim(),
         amount: Math.round(fee.amount),
+        paymentChannel: toPrismaPaymentChannel(fee.paymentChannel),
       }));
 
     const totalAmount =
@@ -140,7 +143,6 @@ export class DeliveriesService {
         data: {
           date: new Date(input.date),
           totalAmount,
-          paymentChannel: toPrismaPaymentChannel(input.paymentChannel),
         },
       });
 

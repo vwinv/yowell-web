@@ -5,7 +5,12 @@ import type {
   DeliveryRun,
   DeliveryRunLine,
 } from "@yowell/shared";
-import { deliveryRemainingCounts, formatCfa, paymentChannelLabel } from "@yowell/shared";
+import {
+  deliveryRemainingCounts,
+  deliveryRunPaymentSummary,
+  formatCfa,
+  paymentChannelLabel,
+} from "@yowell/shared";
 
 const { canWrite, readOnly } = useModulePermission("course");
 
@@ -392,7 +397,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                 <span class="accordion__meta">
                   {{ run.items.length }} ligne{{ run.items.length > 1 ? "s" : "" }}
                   · {{ remainingSummary(run.items) }}
-                  · {{ paymentChannelLabel(run.paymentChannel) }}
+                  · {{ deliveryRunPaymentSummary(run) }}
                 </span>
               </span>
               <strong class="accordion__total">{{ formatCfa(run.totalAmount) }}</strong>
@@ -401,7 +406,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
 
             <div class="accordion__body">
               <p class="remaining-intro">
-                Paiement : <strong>{{ paymentChannelLabel(run.paymentChannel) }}</strong>
+                Paiements : <strong>{{ deliveryRunPaymentSummary(run) }}</strong>
                 — après la production, indique s'il reste quelque chose et précise quoi.
               </p>
               <div class="table-wrap">
@@ -411,6 +416,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                       <th>Libellé</th>
                       <th>Quantité</th>
                       <th>Prix</th>
+                      <th>Paiement</th>
                       <th>Total</th>
                       <th>Restants</th>
                     </tr>
@@ -427,6 +433,7 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                       <td>{{ item.label }}</td>
                       <td>{{ item.quantity }}</td>
                       <td>{{ formatCfa(item.unitPrice) }}</td>
+                      <td>{{ paymentChannelLabel(item.paymentChannel) }}</td>
                       <td>{{ formatCfa(item.lineTotal) }}</td>
                       <td class="remaining-cell">
                         <div
@@ -543,13 +550,14 @@ function isEditing(runId: string, item: DeliveryRunLine) {
                       </td>
                       <td>—</td>
                       <td>—</td>
+                      <td>{{ paymentChannelLabel(fee.paymentChannel) }}</td>
                       <td>{{ formatCfa(fee.amount) }}</td>
                       <td />
                     </tr>
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td colspan="3"><strong>Total course</strong></td>
+                      <td colspan="4"><strong>Total course</strong></td>
                       <td><strong>{{ formatCfa(run.totalAmount) }}</strong></td>
                       <td />
                     </tr>

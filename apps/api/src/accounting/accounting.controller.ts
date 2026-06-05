@@ -1,12 +1,13 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import type {
-  CreateManualAccountingEntryInput,
   ManualAccountingEntry,
   UpdateCaisseInput,
   UpdateChannelBalancesInput,
 } from "@yowell/shared";
 
 import { AccountingService } from "./accounting.service";
+import { CreateManualEntryDto } from "./dto/create-manual-entry.dto";
+import { UpdateManualEntryDto } from "./dto/update-manual-entry.dto";
 
 @Controller("accounting")
 export class AccountingController {
@@ -18,10 +19,16 @@ export class AccountingController {
   }
 
   @Post("entries")
-  createManual(
-    @Body() body: CreateManualAccountingEntryInput,
-  ): Promise<ManualAccountingEntry> {
+  createManual(@Body() body: CreateManualEntryDto): Promise<ManualAccountingEntry> {
     return this.accountingService.createManual(body);
+  }
+
+  @Patch("entries/:id")
+  updateManual(
+    @Param("id") id: string,
+    @Body() body: UpdateManualEntryDto,
+  ): Promise<ManualAccountingEntry> {
+    return this.accountingService.updateManual(id, body);
   }
 
   @Delete("entries/:id")

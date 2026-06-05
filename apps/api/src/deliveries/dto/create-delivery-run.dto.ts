@@ -24,6 +24,9 @@ export class CreateDeliveryRunLineDto {
   @IsNumber()
   @Min(0)
   unitPrice!: number;
+
+  @IsIn(["cash", "om", "wave"])
+  paymentChannel!: "cash" | "om" | "wave";
 }
 
 export class CreateDeliveryRunFeeDto {
@@ -34,6 +37,9 @@ export class CreateDeliveryRunFeeDto {
   @IsNumber()
   @Min(0)
   amount!: number;
+
+  @IsIn(["cash", "om", "wave"])
+  paymentChannel!: "cash" | "om" | "wave";
 }
 
 export class CreateDeliveryRunDto {
@@ -51,7 +57,4 @@ export class CreateDeliveryRunDto {
   @ValidateNested({ each: true })
   @Type(() => CreateDeliveryRunFeeDto)
   fees?: CreateDeliveryRunFeeDto[];
-
-  @IsIn(["cash", "om", "wave"])
-  paymentChannel!: "cash" | "om" | "wave";
 }

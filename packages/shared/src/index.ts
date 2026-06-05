@@ -254,6 +254,7 @@ export type ManualAccountingEntry = {
   label: string;
   amount: number;
   type: "income" | "expense";
+  paymentChannel: PaymentChannel;
   createdAt: string;
 };
 
@@ -262,7 +263,10 @@ export type CreateManualAccountingEntryInput = {
   label: string;
   amount: number;
   type: "income" | "expense";
+  paymentChannel: PaymentChannel;
 };
+
+export type UpdateManualAccountingEntryInput = CreateManualAccountingEntryInput;
 
 export type UpdateCaisseInput = {
   amount: number;
@@ -301,6 +305,7 @@ export type DeliveryRunLine = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  paymentChannel: PaymentChannel;
   /** true = il reste après production ; false = tout utilisé ; absent = pas encore renseigné */
   hasRemaining?: boolean;
   /** Détail de ce qu'il reste (obligatoire si hasRemaining === true) */
@@ -313,6 +318,7 @@ export type DeliveryRunFee = {
   id: string;
   label: string;
   amount: number;
+  paymentChannel: PaymentChannel;
 };
 
 export type DeliveryRun = {
@@ -321,7 +327,6 @@ export type DeliveryRun = {
   items: DeliveryRunLine[];
   fees: DeliveryRunFee[];
   totalAmount: number;
-  paymentChannel: PaymentChannel;
   createdAt: string;
 };
 
@@ -349,18 +354,19 @@ export type CreateDeliveryRunLineInput = {
   label: string;
   quantity: number;
   unitPrice: number;
+  paymentChannel: PaymentChannel;
 };
 
 export type CreateDeliveryRunFeeInput = {
   label: string;
   amount: number;
+  paymentChannel: PaymentChannel;
 };
 
 export type CreateDeliveryRunInput = {
   date: string;
   items: CreateDeliveryRunLineInput[];
   fees?: CreateDeliveryRunFeeInput[];
-  paymentChannel: PaymentChannel;
 };
 
 export type UpdateDeliveryItemRemainingInput = {
@@ -372,6 +378,23 @@ export type UpdateDeliveryItemRemainingInput = {
 
 export function deliveryRunTotal(items: DeliveryRunLine[]): number {
   return items.reduce((sum, item) => sum + item.lineTotal, 0);
+}
+
+export function deliveryRunPaymentChannels(
+  run: Pick<DeliveryRun, "items" | "fees">,
+): PaymentChannel[] {
+  const channels = new Set<PaymentChannel>();
+  for (const item of run.items) channels.add(item.paymentChannel);
+  for (const fee of run.fees) channels.add(fee.paymentChannel);
+  return [...channels];
+}
+
+export function deliveryRunPaymentSummary(
+  run: Pick<DeliveryRun, "items" | "fees">,
+): string {
+  const channels = deliveryRunPaymentChannels(run);
+  if (!channels.length) return "—";
+  return channels.map((channel) => paymentChannelLabel(channel)).join(" + ");
 }
 
 export function buildDeliveryRemainingItems(runs: DeliveryRun[]): DeliveryRemainingItem[] {

@@ -10,6 +10,7 @@ const { data, pending, refresh } = await useApiFetch<AccountingOverview>(
 );
 
 const showForm = ref(false);
+const editingEntry = ref<AccountingEntry | null>(null);
 const ManualEntryFormLazy = defineAsyncComponent(
   () => import("~/components/ManualEntryForm.vue"),
 );
@@ -84,6 +85,17 @@ async function saveChannelBalances() {
   }
 }
 
+function startEditManual(entry: AccountingEntry) {
+  if (!canWrite.value) return;
+  if (entry.source !== "manual" || !entry.sourceId) return;
+  editingEntry.value = entry;
+  showForm.value = false;
+}
+
+function cancelEditManual() {
+  editingEntry.value = null;
+}
+
 async function removeManual(entry: AccountingEntry) {
   if (!canWrite.value) return;
   if (entry.source !== "manual" || !entry.sourceId) return;
@@ -147,8 +159,9 @@ async function removeManual(entry: AccountingEntry) {
       </div>
 
       <p class="accounting-hint">
-        Les soldes par canal = solde d'ouverture + ventes payées sur ce canal − courses payées sur ce canal.
-        Les saisies manuelles impactent le <strong>solde global</strong> uniquement.
+        Les soldes par canal = solde d'ouverture + ventes payées + revenus manuels
+        − courses − dépenses manuelles, pour chaque canal (Cash, OM, Wave).
+        Les saisies manuelles doivent préciser le canal concerné.
         Une vente n'apparaît qu'après « Marquer payé » avec le canal choisi sur la page Ventes.
       </p>
 
@@ -237,6 +250,20 @@ async function removeManual(entry: AccountingEntry) {
         />
       </AppModal>
 
+      <AppModal
+        :open="!!editingEntry"
+        title="Modifier l'écriture"
+        @close="cancelEditManual"
+      >
+        <ManualEntryFormLazy
+          v-if="editingEntry"
+          :entry="editingEntry"
+          :readonly="readOnly"
+          @success="refresh(); editingEntry = null"
+          @cancel="cancelEditManual"
+        />
+      </AppModal>
+
       <section class="panel">
         <h2 class="panel__title">Journal des opérations</h2>
         <div v-if="data?.recentEntries.length" class="table-wrap">
@@ -283,15 +310,24 @@ async function removeManual(entry: AccountingEntry) {
                   {{ formatEntryAmount(entry) }}
                 </td>
                 <td class="table-actions">
-                  <button
-                    v-if="entry.source === 'manual'"
-                    type="button"
-                    class="btn btn--ghost btn--sm"
-                    :disabled="readOnly"
-                    @click="removeManual(entry)"
-                  >
-                    Supprimer
-                  </button>
+                  <template v-if="entry.source === 'manual'">
+                    <button
+                      type="button"
+                      class="btn btn--ghost btn--sm"
+                      :disabled="readOnly"
+                      @click="startEditManual(entry)"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--ghost btn--sm"
+                      :disabled="readOnly"
+                      @click="removeManual(entry)"
+                    >
+                      Supprimer
+                    </button>
+                  </template>
                 </td>
               </tr>
             </tbody>

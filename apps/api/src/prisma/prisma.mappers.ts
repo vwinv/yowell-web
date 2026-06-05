@@ -261,6 +261,7 @@ export function mapManualAccountingEntry(
     label: entry.label,
     amount: entry.amount,
     type: toSharedAccountingEntryType(entry.type),
+    paymentChannel: toSharedPaymentChannel(entry.paymentChannel),
     createdAt: dateToIso(entry.createdAt),
   };
 }
@@ -307,6 +308,7 @@ function mapDeliveryRunLine(
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     lineTotal: item.lineTotal,
+    paymentChannel: toSharedPaymentChannel(item.paymentChannel),
     hasRemaining: item.hasRemaining ?? undefined,
     remainingNote: item.remainingNote ?? undefined,
     initialRemainingStock: item.initialRemainingStock ?? undefined,
@@ -320,6 +322,7 @@ function mapDeliveryRunFee(
     id: fee.id,
     label: fee.label,
     amount: fee.amount,
+    paymentChannel: toSharedPaymentChannel(fee.paymentChannel),
   };
 }
 
@@ -334,7 +337,6 @@ export function mapDeliveryRun(run: PrismaDeliveryRunRecord): DeliveryRun {
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map(mapDeliveryRunFee),
     totalAmount: run.totalAmount,
-    paymentChannel: toSharedPaymentChannel(run.paymentChannel),
     createdAt: dateToIso(run.createdAt),
   };
 }

@@ -55,6 +55,9 @@ function humanSummary(method: string, path: string): string {
   if (method === "POST" && base === "/api/accounting/entries") {
     return "Saisie comptable manuelle";
   }
+  if (method === "PATCH" && base.startsWith("/api/accounting/entries/")) {
+    return "Modification d'une écriture comptable";
+  }
   if (method === "DELETE" && base.startsWith("/api/accounting/entries/")) {
     return "Suppression d'une écriture comptable";
   }

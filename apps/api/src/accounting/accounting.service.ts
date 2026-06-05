@@ -15,12 +15,14 @@ import type {
   ManualAccountingEntry,
   UpdateCaisseInput,
   UpdateChannelBalancesInput,
+  UpdateManualAccountingEntryInput,
 } from "@yowell/shared";
 
 import { DeliveriesService } from "../deliveries/deliveries.service";
 import {
   mapManualAccountingEntry,
   toPrismaAccountingEntryType,
+  toPrismaPaymentChannel,
 } from "../prisma/prisma.mappers";
 import { PrismaService } from "../prisma/prisma.service";
 import { SalesService } from "../sales/sales.service";
@@ -223,6 +225,44 @@ export class AccountingService implements OnModuleInit {
         label,
         amount: Math.round(input.amount),
         type: toPrismaAccountingEntryType(input.type),
+        paymentChannel: toPrismaPaymentChannel(input.paymentChannel),
+      },
+    });
+
+    return mapManualAccountingEntry(entry);
+  }
+
+  async updateManual(
+    id: string,
+    input: UpdateManualAccountingEntryInput,
+  ): Promise<ManualAccountingEntry> {
+    const existing = await this.prisma.manualAccountingEntry.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException("Écriture manuelle introuvable.");
+    }
+
+    const label = input.label?.trim();
+    if (!label) {
+      throw new BadRequestException("Le libellé est obligatoire.");
+    }
+    if (!input.amount || input.amount <= 0) {
+      throw new BadRequestException("Le montant doit être supérieur à zéro.");
+    }
+    if (input.type !== "income" && input.type !== "expense") {
+      throw new BadRequestException("Type invalide (income ou expense).");
+    }
+
+    const entry = await this.prisma.manualAccountingEntry.update({
+      where: { id },
+      data: {
+        date: new Date(input.date),
+        label,
+        amount: Math.round(input.amount),
+        type: toPrismaAccountingEntryType(input.type),
+        paymentChannel: toPrismaPaymentChannel(input.paymentChannel),
       },
     });
 
@@ -246,9 +286,10 @@ export class AccountingService implements OnModuleInit {
     opening: ChannelBalances,
   ): Promise<ChannelBalances> {
     const balances: ChannelBalances = { ...opening };
-    const [sales, deliveries] = await Promise.all([
+    const [sales, deliveries, manualEntries] = await Promise.all([
       this.salesService.listAll(),
       this.deliveriesService.listAll(),
+      this.listManualEntries(),
     ]);
 
     for (const sale of sales) {
@@ -258,7 +299,20 @@ export class AccountingService implements OnModuleInit {
     }
 
     for (const run of deliveries) {
-      balances[run.paymentChannel] -= run.totalAmount;
+      for (const item of run.items) {
+        balances[item.paymentChannel] -= item.lineTotal;
+      }
+      for (const fee of run.fees) {
+        balances[fee.paymentChannel] -= fee.amount;
+      }
+    }
+
+    for (const manual of manualEntries) {
+      if (manual.type === "income") {
+        balances[manual.paymentChannel] += manual.amount;
+      } else {
+        balances[manual.paymentChannel] -= manual.amount;
+      }
     }
 
     return balances;
@@ -324,16 +378,31 @@ export class AccountingService implements OnModuleInit {
         month: "short",
         year: "numeric",
       });
-      entries.push({
-        id: `delivery-${run.id}`,
-        date: run.date,
-        label: `Course du ${dateLabel}`,
-        amount: run.totalAmount,
-        type: "expense",
-        source: "delivery",
-        sourceId: run.id,
-        paymentChannel: run.paymentChannel,
-      });
+      const amountsByChannel = new Map<string, number>();
+      for (const item of run.items) {
+        amountsByChannel.set(
+          item.paymentChannel,
+          (amountsByChannel.get(item.paymentChannel) ?? 0) + item.lineTotal,
+        );
+      }
+      for (const fee of run.fees) {
+        amountsByChannel.set(
+          fee.paymentChannel,
+          (amountsByChannel.get(fee.paymentChannel) ?? 0) + fee.amount,
+        );
+      }
+      for (const [channel, amount] of amountsByChannel) {
+        entries.push({
+          id: `delivery-${run.id}-${channel}`,
+          date: run.date,
+          label: `Course du ${dateLabel}`,
+          amount,
+          type: "expense",
+          source: "delivery",
+          sourceId: run.id,
+          paymentChannel: channel as "cash" | "om" | "wave",
+        });
+      }
     }
 
     for (const manual of manualEntries) {
@@ -345,6 +414,7 @@ export class AccountingService implements OnModuleInit {
         type: manual.type,
         source: "manual",
         sourceId: manual.id,
+        paymentChannel: manual.paymentChannel,
       });
     }
 

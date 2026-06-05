@@ -15,26 +15,29 @@ type LineDraft = {
   label: string;
   quantity: number;
   unitPrice: number | "";
+  paymentChannel: "cash" | "om" | "wave";
 };
 
 type FeeDraft = {
   label: string;
   amount: number | "";
+  paymentChannel: "cash" | "om" | "wave";
 };
 
 const date = ref(props.run.date.slice(0, 10));
-const paymentChannel = ref(props.run.paymentChannel);
 const lines = ref<LineDraft[]>(
   props.run.items.map((item) => ({
     label: item.label,
     quantity: item.quantity,
     unitPrice: item.unitPrice,
+    paymentChannel: item.paymentChannel,
   })),
 );
 const fees = ref<FeeDraft[]>(
   props.run.fees.map((fee) => ({
     label: fee.label,
     amount: fee.amount,
+    paymentChannel: fee.paymentChannel,
   })),
 );
 
@@ -59,7 +62,7 @@ const feesTotal = computed(() =>
 const grandTotal = computed(() => courseTotal.value + feesTotal.value);
 
 function addLine() {
-  lines.value.push({ label: "", quantity: 0.5, unitPrice: "" });
+  lines.value.push({ label: "", quantity: 0.5, unitPrice: "", paymentChannel: "cash" });
 }
 
 function removeLine(index: number) {
@@ -68,7 +71,7 @@ function removeLine(index: number) {
 }
 
 function addFee() {
-  fees.value.push({ label: "", amount: "" });
+  fees.value.push({ label: "", amount: "", paymentChannel: "cash" });
 }
 
 function removeFee(index: number) {
@@ -100,12 +103,13 @@ async function submit() {
           label: l.label.trim(),
           quantity: l.quantity,
           unitPrice: Number(l.unitPrice),
+          paymentChannel: l.paymentChannel,
         })),
         fees: validFees.map((f) => ({
           label: f.label.trim(),
           amount: Number(f.amount),
+          paymentChannel: f.paymentChannel,
         })),
-        paymentChannel: paymentChannel.value,
       },
     });
     success.value = "Course modifiée.";
@@ -120,22 +124,10 @@ async function submit() {
 
 <template>
   <form @submit.prevent="submit">
-    <div class="form-grid" style="max-width: 520px; margin-bottom: 1.25rem">
+    <div class="form-grid" style="max-width: 320px; margin-bottom: 1.25rem">
       <div class="form-field">
         <label for="edit-run-date">Date de la course *</label>
         <input id="edit-run-date" v-model="date" type="date" required />
-      </div>
-      <div class="form-field">
-        <label for="edit-run-payment">Moyen de paiement *</label>
-        <select id="edit-run-payment" v-model="paymentChannel" required>
-          <option
-            v-for="option in PAYMENT_CHANNEL_OPTIONS"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
       </div>
     </div>
 
@@ -149,6 +141,7 @@ async function submit() {
               <th>Libellé</th>
               <th>Quantité</th>
               <th>Prix (FCFA)</th>
+              <th>Paiement</th>
               <th>Total</th>
               <th />
             </tr>
@@ -185,6 +178,17 @@ async function submit() {
                   required
                 />
               </td>
+              <td>
+                <select v-model="line.paymentChannel" class="table-input" required>
+                  <option
+                    v-for="option in PAYMENT_CHANNEL_OPTIONS"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </td>
               <td class="course-line-total">
                 {{ formatCfa(lineTotal(line)) }}
               </td>
@@ -203,7 +207,7 @@ async function submit() {
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="3" class="course-table-footer-label">
+              <td colspan="4" class="course-table-footer-label">
                 <strong>Total de la course</strong>
               </td>
               <td colspan="2">
@@ -228,6 +232,7 @@ async function submit() {
             <tr>
               <th>Libellé du frais</th>
               <th>Montant (FCFA)</th>
+              <th>Paiement</th>
               <th />
             </tr>
           </thead>
@@ -252,6 +257,17 @@ async function submit() {
                 />
               </td>
               <td>
+                <select v-model="fee.paymentChannel" class="table-input" required>
+                  <option
+                    v-for="option in PAYMENT_CHANNEL_OPTIONS"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </td>
+              <td>
                 <button
                   type="button"
                   class="btn btn--ghost"
@@ -265,7 +281,7 @@ async function submit() {
           </tbody>
           <tfoot>
             <tr>
-              <td class="course-table-footer-label"><strong>Total frais</strong></td>
+              <td colspan="2" class="course-table-footer-label"><strong>Total frais</strong></td>
               <td colspan="2"><strong>{{ formatCfa(feesTotal) }}</strong></td>
             </tr>
           </tfoot>
