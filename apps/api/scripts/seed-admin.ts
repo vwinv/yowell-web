@@ -1,7 +1,8 @@
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, UserRole } from "@prisma/client";
 import * as bcrypt from "bcrypt";
+
+import { createPrismaPgAdapter } from "../src/prisma/pg-connection";
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -15,7 +16,7 @@ async function main() {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const prisma = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: databaseUrl }),
+    adapter: createPrismaPgAdapter(databaseUrl),
   });
 
   const user = await prisma.user.upsert({
