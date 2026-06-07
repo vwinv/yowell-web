@@ -12,6 +12,7 @@ import type { Response } from "express";
 
 import { CreateSaleDto } from "./dto/create-sale.dto";
 import { UpdateSaleDto } from "./dto/update-sale.dto";
+import { UpdateSaleDeliveryDto } from "./dto/update-sale-delivery.dto";
 import { UpdateSalePaymentDto } from "./dto/update-sale-payment.dto";
 import { SalesService } from "./sales.service";
 
@@ -35,6 +36,14 @@ export class SalesController {
     @Body() dto: UpdateSalePaymentDto,
   ) {
     return this.salesService.updatePaymentStatus(id, dto);
+  }
+
+  @Patch(":id/delivery-status")
+  updateDeliveryStatus(
+    @Param("id") id: string,
+    @Body() dto: UpdateSaleDeliveryDto,
+  ) {
+    return this.salesService.updateDeliveryStatus(id, dto);
   }
 
   @Patch(":id")

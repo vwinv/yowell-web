@@ -756,6 +756,16 @@ a {
   color: #3949ab;
 }
 
+.badge--delivered {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.badge--not-delivered {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
 .payment-cell {
   display: flex;
   flex-direction: column;

@@ -33,6 +33,11 @@ enum SaleKind {
   QUOTE
 }
 
+enum SaleDeliveryStatus {
+  DELIVERED
+  NOT_DELIVERED
+}
+
 enum PaymentChannel {
   CASH
   OM
@@ -104,6 +109,7 @@ model Sale {
   paymentStatus    SalePaymentStatus   @default(UNPAID)
   paymentChannel   PaymentChannel?
   kind             SaleKind            @default(SALE)
+  deliveryStatus   SaleDeliveryStatus  @default(NOT_DELIVERED)
   notes            String              @default("")
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -114,6 +120,7 @@ model Sale {
   @@index([paymentStatus])
   @@index([paymentChannel])
   @@index([kind])
+  @@index([deliveryStatus])
   @@index([createdAt])
 }
 

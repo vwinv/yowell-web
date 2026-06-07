@@ -3,6 +3,7 @@ import type {
   ClientsOverview,
   JuiceProduct,
   Sale,
+  SaleDeliveryStatus,
   SalePaymentStatus,
   SalesOverview,
 } from "@yowell/shared";
@@ -97,6 +98,7 @@ async function onSaleEditSuccess() {
 const convertingId = ref<string | null>(null);
 const deletingId = ref<string | null>(null);
 const updatingPaymentId = ref<string | null>(null);
+const updatingDeliveryId = ref<string | null>(null);
 const pendingPaymentChannels = ref<Record<string, "cash" | "om" | "wave">>({});
 const { generatingId: generatingInvoiceId, downloadInvoice } = useSaleInvoice();
 
@@ -128,6 +130,32 @@ async function convertToSale(sale: Sale) {
 
 function paymentLabel(status: SalePaymentStatus) {
   return status === "paid" ? "Payé" : "Non payé";
+}
+
+function deliveryLabel(status: SaleDeliveryStatus) {
+  return status === "delivered" ? "Livré" : "À livrer";
+}
+
+const undeliveredSales = computed(
+  () => data.value?.undeliveredSales ?? [],
+);
+
+async function updateDeliveryStatus(
+  sale: Sale,
+  deliveryStatus: SaleDeliveryStatus,
+) {
+  if (!canWrite.value || sale.kind !== "sale") return;
+  if (sale.deliveryStatus === deliveryStatus) return;
+  updatingDeliveryId.value = sale.id;
+  try {
+    await apiFetch(useApiUrl(`/sales/${sale.id}/delivery-status`), {
+      method: "PATCH",
+      body: { deliveryStatus },
+    });
+    await refresh();
+  } finally {
+    updatingDeliveryId.value = null;
+  }
 }
 
 async function markAsPaid(sale: Sale) {
@@ -189,13 +217,51 @@ async function removeSale(sale: Sale) {
   <div>
     <PageHeader
       title="Ventes"
-      description="Enregistre les ventes ou crée un devis sans stock — marque « Payé » pour comptabiliser l'encaissement."
+      description="Enregistre les ventes ou crée un devis sans stock — marque « Payé » pour comptabiliser l'encaissement et « Livré » pour suivre les livraisons."
     />
 
     <p v-if="pending" class="loading">Chargement des ventes</p>
 
     <template v-else>
       <ReadOnlyBanner :show="readOnly" />
+
+      <section
+        v-if="undeliveredSales.length"
+        class="delivery-alert"
+        role="status"
+      >
+        <p class="delivery-alert__title">
+          📦 {{ undeliveredSales.length }} commande{{
+            undeliveredSales.length > 1 ? "s" : ""
+          }}
+          en attente de livraison
+        </p>
+        <ul class="delivery-alert__list">
+          <li
+            v-for="sale in undeliveredSales"
+            :key="sale.id"
+            class="delivery-alert__item"
+          >
+            <span class="delivery-alert__info">
+              <strong>{{ sale.clientName }}</strong>
+              — {{ formatCfa(sale.totalAmount) }}
+              — {{ new Date(sale.orderedAt).toLocaleDateString("fr-FR") }}
+            </span>
+            <button
+              type="button"
+              class="btn btn--primary btn--sm"
+              :disabled="readOnly || updatingDeliveryId === sale.id"
+              @click="updateDeliveryStatus(sale, 'delivered')"
+            >
+              {{
+                updatingDeliveryId === sale.id
+                  ? "…"
+                  : "Marquer livré"
+              }}
+            </button>
+          </li>
+        </ul>
+      </section>
 
       <div class="stats-grid">
         <StatCard
@@ -332,6 +398,7 @@ async function removeSale(sale: Sale) {
                 <th>Commande</th>
                 <th>Total</th>
                 <th>Paiement</th>
+                <th>Livraison</th>
                 <th>Canal</th>
                 <th>Notes</th>
                 <th />
@@ -406,6 +473,47 @@ async function removeSale(sale: Sale) {
                     }}
                   </button>
                 </td>
+                <td class="payment-cell">
+                  <template v-if="sale.kind === 'sale'">
+                    <span
+                      class="badge"
+                      :class="{
+                        'badge--delivered': sale.deliveryStatus === 'delivered',
+                        'badge--not-delivered':
+                          sale.deliveryStatus === 'not_delivered',
+                      }"
+                    >
+                      {{ deliveryLabel(sale.deliveryStatus) }}
+                    </span>
+                    <button
+                      v-if="sale.deliveryStatus === 'not_delivered'"
+                      type="button"
+                      class="btn btn--primary btn--sm payment-cell__action"
+                      :disabled="readOnly || updatingDeliveryId === sale.id"
+                      @click="updateDeliveryStatus(sale, 'delivered')"
+                    >
+                      {{
+                        updatingDeliveryId === sale.id
+                          ? "…"
+                          : "Marquer livré"
+                      }}
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      class="btn btn--ghost btn--sm payment-cell__action"
+                      :disabled="readOnly || updatingDeliveryId === sale.id"
+                      @click="updateDeliveryStatus(sale, 'not_delivered')"
+                    >
+                      {{
+                        updatingDeliveryId === sale.id
+                          ? "…"
+                          : "Annuler livraison"
+                      }}
+                    </button>
+                  </template>
+                  <span v-else>—</span>
+                </td>
                 <td>
                   <span v-if="sale.paymentStatus === 'paid' && sale.paymentChannel">
                     {{ paymentChannelLabel(sale.paymentChannel) }}
@@ -471,3 +579,42 @@ async function removeSale(sale: Sale) {
     </template>
   </div>
 </template>
+
+<style scoped>
+.delivery-alert {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+}
+
+.delivery-alert__title {
+  margin: 0 0 0.65rem;
+  font-weight: 600;
+  color: #9a3412;
+}
+
+.delivery-alert__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.delivery-alert__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #7c2d12;
+}
+
+.delivery-alert__info {
+  min-width: 0;
+}
+</style>

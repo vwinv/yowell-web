@@ -17,6 +17,7 @@ import {
   SalesOverview,
   UpdateSaleInput,
   UpdateSalePaymentInput,
+  UpdateSaleDeliveryInput,
   type PaymentChannel,
 } from "@yowell/shared";
 
@@ -26,6 +27,7 @@ import {
   toPrismaJuiceVolume,
   toPrismaPaymentChannel,
   toPrismaSaleKind,
+  toPrismaSaleDeliveryStatus,
   toPrismaSalePaymentStatus,
   toSharedJuiceVolume,
   toSharedPaymentChannel,
@@ -147,8 +149,11 @@ export class SalesService {
     const saleKind = PrismaSaleKind.SALE;
     const paid = PrismaSalePaymentStatus.PAID;
 
+    const notDelivered = toPrismaSaleDeliveryStatus("not_delivered");
+
     const [
       recentRows,
+      undeliveredRows,
       salesToday,
       revenueTodayAgg,
       revenueMonthAgg,
@@ -157,6 +162,14 @@ export class SalesService {
         include: { items: true },
         orderBy: { orderedAt: "desc" },
         take: 30,
+      }),
+      this.prisma.sale.findMany({
+        where: {
+          kind: saleKind,
+          deliveryStatus: notDelivered,
+        },
+        include: { items: true },
+        orderBy: { orderedAt: "asc" },
       }),
       this.prisma.sale.count({
         where: {
@@ -183,10 +196,12 @@ export class SalesService {
     ]);
 
     const recentSales = recentRows.map(mapSale);
+    const undeliveredSales = undeliveredRows.map(mapSale);
 
     return {
       sales: recentSales,
       recentSales,
+      undeliveredSales,
       salesToday,
       revenueToday: revenueTodayAgg._sum.totalAmount ?? 0,
       revenueMonth: revenueMonthAgg._sum.totalAmount ?? 0,
@@ -530,6 +545,34 @@ export class SalesService {
 
       await tx.sale.delete({ where: { id } });
     });
+  }
+
+  async updateDeliveryStatus(
+    id: string,
+    input: UpdateSaleDeliveryInput,
+  ): Promise<Sale> {
+    const existing = await this.prisma.sale.findUnique({
+      where: { id },
+      select: { id: true, kind: true },
+    });
+    if (!existing) {
+      throw new NotFoundException("Vente introuvable");
+    }
+    if (existing.kind === toPrismaSaleKind("quote")) {
+      throw new BadRequestException(
+        "Un devis n'a pas de statut de livraison — convertis-le d'abord en vente.",
+      );
+    }
+
+    const sale = await this.prisma.sale.update({
+      where: { id },
+      data: {
+        deliveryStatus: toPrismaSaleDeliveryStatus(input.deliveryStatus),
+      },
+      include: { items: true },
+    });
+
+    return mapSale(sale);
   }
 
   async updatePaymentStatus(

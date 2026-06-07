@@ -471,6 +471,8 @@ export const SALE_PERSONALIZATION_FEE = 100;
 
 export type SalePaymentStatus = "paid" | "unpaid";
 
+export type SaleDeliveryStatus = "delivered" | "not_delivered";
+
 /** Vente confirmée ou devis (sans impact stock) */
 export type SaleKind = "sale" | "quote";
 
@@ -497,6 +499,7 @@ export type Sale = {
   paymentStatus: SalePaymentStatus;
   paymentChannel?: PaymentChannel;
   kind: SaleKind;
+  deliveryStatus: SaleDeliveryStatus;
   notes: string;
   createdAt: string;
 };
@@ -504,6 +507,7 @@ export type Sale = {
 export type SalesOverview = {
   sales: Sale[];
   recentSales: Sale[];
+  undeliveredSales: Sale[];
   salesToday: number;
   revenueToday: number;
   revenueMonth: number;
@@ -530,6 +534,10 @@ export type CreateSaleInput = {
 export type UpdateSalePaymentInput = {
   paymentStatus: SalePaymentStatus;
   paymentChannel?: PaymentChannel;
+};
+
+export type UpdateSaleDeliveryInput = {
+  deliveryStatus: SaleDeliveryStatus;
 };
 
 export type UpdateSaleInput = {

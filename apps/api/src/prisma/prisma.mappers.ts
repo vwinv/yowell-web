@@ -4,6 +4,7 @@ import {
   type Prisma,
   PaymentChannel as PrismaPaymentChannel,
   SalePaymentStatus as PrismaSalePaymentStatus,
+  SaleDeliveryStatus as PrismaSaleDeliveryStatus,
   SaleKind as PrismaSaleKind,
   AppModulePermission as PrismaAppModulePermission,
   UserRole as PrismaUserRole,
@@ -26,6 +27,7 @@ import type {
   SaleKind,
   SaleLineItem,
   SalePaymentStatus,
+  SaleDeliveryStatus,
   UserRole,
 } from "@yowell/shared";
 
@@ -114,6 +116,22 @@ export function toSharedSalePaymentStatus(
   status: PrismaSalePaymentStatus,
 ): SalePaymentStatus {
   return status === PrismaSalePaymentStatus.PAID ? "paid" : "unpaid";
+}
+
+export function toPrismaSaleDeliveryStatus(
+  status: SaleDeliveryStatus,
+): PrismaSaleDeliveryStatus {
+  return status === "delivered"
+    ? PrismaSaleDeliveryStatus.DELIVERED
+    : PrismaSaleDeliveryStatus.NOT_DELIVERED;
+}
+
+export function toSharedSaleDeliveryStatus(
+  status: PrismaSaleDeliveryStatus,
+): SaleDeliveryStatus {
+  return status === PrismaSaleDeliveryStatus.DELIVERED
+    ? "delivered"
+    : "not_delivered";
 }
 
 export function toPrismaSaleKind(kind: SaleKind): PrismaSaleKind {
@@ -294,6 +312,7 @@ export function mapSale(sale: PrismaSaleRecord): Sale {
       ? toSharedPaymentChannel(sale.paymentChannel)
       : undefined,
     kind: toSharedSaleKind(sale.kind),
+    deliveryStatus: toSharedSaleDeliveryStatus(sale.deliveryStatus),
     notes: sale.notes,
     createdAt: dateToIso(sale.createdAt),
   };

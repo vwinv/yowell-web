@@ -16,6 +16,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed:admin": "ts-node --transpile-only scripts/seed-admin.ts",
+    "reimport:missing": "ts-node --transpile-only scripts/reimport-courses-accounting.ts",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "typecheck": "tsc --noEmit",
