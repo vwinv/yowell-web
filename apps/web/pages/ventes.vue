@@ -136,21 +136,64 @@ function deliveryLabel(status: SaleDeliveryStatus) {
   return status === "delivered" ? "Livré" : "À livrer";
 }
 
+type DeliveryFilter = "all" | "undelivered" | "delivered";
+
+const deliveryFilter = ref<DeliveryFilter>("all");
+
 const undeliveredSales = computed(
   () => data.value?.undeliveredSales ?? [],
 );
 
-async function updateDeliveryStatus(
-  sale: Sale,
-  deliveryStatus: SaleDeliveryStatus,
-) {
-  if (!canWrite.value || sale.kind !== "sale") return;
-  if (sale.deliveryStatus === deliveryStatus) return;
+const undeliveredCount = computed(() => undeliveredSales.value.length);
+
+const displayedSales = computed(() => {
+  const recent = data.value?.recentSales ?? [];
+  if (deliveryFilter.value === "undelivered") {
+    return undeliveredSales.value;
+  }
+  if (deliveryFilter.value === "delivered") {
+    return recent.filter(
+      (sale) =>
+        sale.kind === "sale" && sale.deliveryStatus === "delivered",
+    );
+  }
+  return recent;
+});
+
+const emptyHistoryMessage = computed(() => {
+  if (deliveryFilter.value === "undelivered") {
+    return "Aucune livraison en attente.";
+  }
+  if (deliveryFilter.value === "delivered") {
+    return "Aucune vente livrée dans l'historique récent.";
+  }
+  return "Aucune vente enregistrée.";
+});
+
+function focusUndelivered() {
+  deliveryFilter.value = "undelivered";
+  nextTick(() => {
+    document
+      .getElementById("ventes-historique")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+async function markAsDelivered(sale: Sale) {
+  if (
+    !canWrite.value ||
+    sale.kind !== "sale" ||
+    sale.deliveryStatus === "delivered"
+  ) {
+    return;
+  }
   updatingDeliveryId.value = sale.id;
   try {
     await apiFetch(useApiUrl(`/sales/${sale.id}/delivery-status`), {
       method: "PATCH",
-      body: { deliveryStatus },
+      body: {
+        deliveryStatus: "delivered" satisfies SaleDeliveryStatus,
+      },
     });
     await refresh();
   } finally {
@@ -225,45 +268,7 @@ async function removeSale(sale: Sale) {
     <template v-else>
       <ReadOnlyBanner :show="readOnly" />
 
-      <section
-        v-if="undeliveredSales.length"
-        class="delivery-alert"
-        role="status"
-      >
-        <p class="delivery-alert__title">
-          📦 {{ undeliveredSales.length }} commande{{
-            undeliveredSales.length > 1 ? "s" : ""
-          }}
-          en attente de livraison
-        </p>
-        <ul class="delivery-alert__list">
-          <li
-            v-for="sale in undeliveredSales"
-            :key="sale.id"
-            class="delivery-alert__item"
-          >
-            <span class="delivery-alert__info">
-              <strong>{{ sale.clientName }}</strong>
-              — {{ formatCfa(sale.totalAmount) }}
-              — {{ new Date(sale.orderedAt).toLocaleDateString("fr-FR") }}
-            </span>
-            <button
-              type="button"
-              class="btn btn--primary btn--sm"
-              :disabled="readOnly || updatingDeliveryId === sale.id"
-              @click="updateDeliveryStatus(sale, 'delivered')"
-            >
-              {{
-                updatingDeliveryId === sale.id
-                  ? "…"
-                  : "Marquer livré"
-              }}
-            </button>
-          </li>
-        </ul>
-      </section>
-
-      <div class="stats-grid">
+      <div class="stats-grid stats-grid--4">
         <StatCard
           label="Ventes aujourd'hui"
           :value="data?.salesToday ?? 0"
@@ -282,6 +287,19 @@ async function removeSale(sale: Sale) {
           icon="📈"
           tone="blue"
         />
+        <button
+          type="button"
+          class="stat-card-trigger"
+          :disabled="undeliveredCount === 0"
+          @click="focusUndelivered"
+        >
+          <StatCard
+            label="À livrer"
+            :value="undeliveredCount"
+            icon="📦"
+            tone="gold"
+          />
+        </button>
       </div>
 
       <div class="stock-actions">
@@ -387,9 +405,50 @@ async function removeSale(sale: Sale) {
         />
       </AppModal>
 
-      <section class="panel">
-        <h2 class="panel__title">Historique</h2>
-        <div v-if="data?.recentSales.length" class="table-wrap">
+      <section id="ventes-historique" class="panel">
+        <div class="panel__header-row">
+          <h2 class="panel__title">Historique</h2>
+          <div class="ventes-filters">
+            <button
+              type="button"
+              class="btn btn--sm"
+              :class="
+                deliveryFilter === 'all' ? 'btn--primary' : 'btn--secondary'
+              "
+              @click="deliveryFilter = 'all'"
+            >
+              Toutes
+            </button>
+            <button
+              type="button"
+              class="btn btn--sm"
+              :class="
+                deliveryFilter === 'undelivered'
+                  ? 'btn--primary'
+                  : 'btn--secondary'
+              "
+              @click="deliveryFilter = 'undelivered'"
+            >
+              À livrer
+              <template v-if="undeliveredCount > 0">
+                ({{ undeliveredCount }})
+              </template>
+            </button>
+            <button
+              type="button"
+              class="btn btn--sm"
+              :class="
+                deliveryFilter === 'delivered'
+                  ? 'btn--primary'
+                  : 'btn--secondary'
+              "
+              @click="deliveryFilter = 'delivered'"
+            >
+              Livrées
+            </button>
+          </div>
+        </div>
+        <div v-if="displayedSales.length" class="table-wrap">
           <table class="table">
             <thead>
               <tr>
@@ -405,7 +464,7 @@ async function removeSale(sale: Sale) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="sale in data.recentSales" :key="sale.id">
+              <tr v-for="sale in displayedSales" :key="sale.id">
                 <td>
                   {{ new Date(sale.orderedAt).toLocaleDateString("fr-FR") }}
                 </td>
@@ -490,25 +549,12 @@ async function removeSale(sale: Sale) {
                       type="button"
                       class="btn btn--primary btn--sm payment-cell__action"
                       :disabled="readOnly || updatingDeliveryId === sale.id"
-                      @click="updateDeliveryStatus(sale, 'delivered')"
+                      @click="markAsDelivered(sale)"
                     >
                       {{
                         updatingDeliveryId === sale.id
                           ? "…"
                           : "Marquer livré"
-                      }}
-                    </button>
-                    <button
-                      v-else
-                      type="button"
-                      class="btn btn--ghost btn--sm payment-cell__action"
-                      :disabled="readOnly || updatingDeliveryId === sale.id"
-                      @click="updateDeliveryStatus(sale, 'not_delivered')"
-                    >
-                      {{
-                        updatingDeliveryId === sale.id
-                          ? "…"
-                          : "Annuler livraison"
                       }}
                     </button>
                   </template>
@@ -574,47 +620,30 @@ async function removeSale(sale: Sale) {
             </tbody>
           </table>
         </div>
-        <EmptyState v-else message="Aucune vente enregistrée." />
+        <EmptyState v-else :message="emptyHistoryMessage" />
       </section>
     </template>
   </div>
 </template>
 
 <style scoped>
-.delivery-alert {
-  margin: 0 0 1.25rem;
-  padding: 0.85rem 1rem;
-  border-radius: 10px;
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-}
-
-.delivery-alert__title {
-  margin: 0 0 0.65rem;
-  font-weight: 600;
-  color: #9a3412;
-}
-
-.delivery-alert__list {
-  margin: 0;
+.stat-card-trigger {
+  display: block;
+  width: 100%;
   padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+  border: none;
+  background: none;
+  text-align: inherit;
+  cursor: pointer;
 }
 
-.delivery-alert__item {
+.stat-card-trigger:disabled {
+  cursor: default;
+}
+
+.ventes-filters {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  color: #7c2d12;
-}
-
-.delivery-alert__info {
-  min-width: 0;
+  gap: 0.4rem;
 }
 </style>
