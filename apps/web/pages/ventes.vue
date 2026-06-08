@@ -30,6 +30,7 @@ const [
 const showSaleForm = ref(false);
 const showQuoteForm = ref(false);
 const editingSaleId = ref<string | null>(null);
+const viewingSale = ref<Sale | null>(null);
 const SaleFormLazy = defineAsyncComponent(
   () => import("~/components/SaleForm.vue"),
 );
@@ -77,6 +78,7 @@ function openQuoteForm() {
 
 function startEditSale(sale: Sale) {
   if (!canWrite.value) return;
+  closeSaleDetail();
   editingSaleId.value = sale.id;
   showSaleForm.value = false;
   showQuoteForm.value = false;
@@ -119,6 +121,7 @@ async function convertToSale(sale: Sale) {
       refreshNuxtData("products-for-sales"),
       refreshNuxtData("stock-overview"),
     ]);
+    syncViewingSale(sale.id);
   } catch {
     alert(
       "Impossible de convertir le devis — vérifie que le stock est suffisant.",
@@ -134,6 +137,28 @@ function paymentLabel(status: SalePaymentStatus) {
 
 function deliveryLabel(status: SaleDeliveryStatus) {
   return status === "delivered" ? "Livré" : "À livrer";
+}
+
+function orderPreview(sale: Sale): string {
+  const items = sale.items;
+  if (!items.length) return "—";
+  const first = items[0]!;
+  const head = `${first.quantity}× ${first.productName} (${first.volume})`;
+  if (items.length === 1) return head;
+  const rest = items.length - 1;
+  return `${head} + ${rest} autre${rest > 1 ? "s" : ""}`;
+}
+
+function openSaleDetail(sale: Sale) {
+  viewingSale.value = sale;
+}
+
+function closeSaleDetail() {
+  viewingSale.value = null;
+}
+
+function saleKindLabel(sale: Sale) {
+  return sale.kind === "quote" ? "Devis" : "Vente";
 }
 
 type DeliveryFilter = "all" | "undelivered" | "delivered";
@@ -196,9 +221,18 @@ async function markAsDelivered(sale: Sale) {
       },
     });
     await refresh();
+    syncViewingSale(sale.id);
   } finally {
     updatingDeliveryId.value = null;
   }
+}
+
+function syncViewingSale(saleId: string) {
+  if (!viewingSale.value || viewingSale.value.id !== saleId) return;
+  const updated =
+    data.value?.recentSales.find((s) => s.id === saleId) ??
+    data.value?.undeliveredSales.find((s) => s.id === saleId);
+  if (updated) viewingSale.value = updated;
 }
 
 async function markAsPaid(sale: Sale) {
@@ -217,6 +251,7 @@ async function markAsPaid(sale: Sale) {
       refreshNuxtData("accounting-overview"),
       refreshNuxtData("clients-overview"),
     ]);
+    syncViewingSale(sale.id);
   } finally {
     updatingPaymentId.value = null;
   }
@@ -242,6 +277,9 @@ async function removeSale(sale: Sale) {
     });
     if (editingSaleId.value === sale.id) {
       editingSaleId.value = null;
+    }
+    if (viewingSale.value?.id === sale.id) {
+      closeSaleDetail();
     }
     await Promise.all([
       refresh(),
@@ -405,6 +443,215 @@ async function removeSale(sale: Sale) {
         />
       </AppModal>
 
+      <AppModal
+        :open="!!viewingSale"
+        :title="
+          viewingSale
+            ? `${saleKindLabel(viewingSale)} — ${viewingSale.clientName}`
+            : 'Détail'
+        "
+        size="lg"
+        @close="closeSaleDetail"
+      >
+        <template v-if="viewingSale">
+          <dl class="sale-detail-meta">
+            <div>
+              <dt>Date</dt>
+              <dd>
+                {{ new Date(viewingSale.orderedAt).toLocaleDateString("fr-FR") }}
+              </dd>
+            </div>
+            <div>
+              <dt>Client</dt>
+              <dd>{{ viewingSale.clientName }}</dd>
+            </div>
+            <div>
+              <dt>Type</dt>
+              <dd>{{ saleKindLabel(viewingSale) }}</dd>
+            </div>
+            <div>
+              <dt>Paiement</dt>
+              <dd>
+                <span
+                  v-if="viewingSale.kind === 'quote'"
+                  class="badge badge--quote"
+                >
+                  Devis
+                </span>
+                <span
+                  v-else
+                  class="badge"
+                  :class="{
+                    'badge--paid': viewingSale.paymentStatus === 'paid',
+                    'badge--unpaid': viewingSale.paymentStatus === 'unpaid',
+                  }"
+                >
+                  {{ paymentLabel(viewingSale.paymentStatus) }}
+                </span>
+                <span
+                  v-if="
+                    viewingSale.kind !== 'quote' &&
+                    viewingSale.paymentStatus === 'paid' &&
+                    viewingSale.paymentChannel
+                  "
+                >
+                  — {{ paymentChannelLabel(viewingSale.paymentChannel) }}
+                </span>
+              </dd>
+            </div>
+            <div v-if="viewingSale.kind === 'sale'">
+              <dt>Livraison</dt>
+              <dd>
+                <span
+                  class="badge"
+                  :class="{
+                    'badge--delivered':
+                      viewingSale.deliveryStatus === 'delivered',
+                    'badge--not-delivered':
+                      viewingSale.deliveryStatus === 'not_delivered',
+                  }"
+                >
+                  {{ deliveryLabel(viewingSale.deliveryStatus) }}
+                </span>
+              </dd>
+            </div>
+          </dl>
+
+          <h3 class="sale-detail__heading">Commande</h3>
+          <ul class="sale-items-list sale-detail__items">
+            <li v-for="(item, i) in viewingSale.items" :key="i">
+              {{ item.quantity }}× {{ item.productName }} ({{ item.volume }})
+              — {{ formatCfa(item.lineTotal) }}
+            </li>
+          </ul>
+
+          <div class="sale-detail-totals">
+            <p v-if="viewingSale.personalization">
+              Personnalisation incluse
+            </p>
+            <p v-if="viewingSale.discountAmount > 0">
+              Remise : <strong>-{{ formatCfa(viewingSale.discountAmount) }}</strong>
+            </p>
+            <p class="sale-detail-totals__total">
+              Total : <strong>{{ formatCfa(viewingSale.totalAmount) }}</strong>
+            </p>
+          </div>
+
+          <p v-if="viewingSale.notes" class="sale-detail-notes">
+            <strong>Notes :</strong> {{ viewingSale.notes }}
+          </p>
+
+          <div
+            v-if="
+              viewingSale.kind !== 'quote' &&
+              viewingSale.paymentStatus === 'unpaid'
+            "
+            class="sale-detail-channel"
+          >
+            <label :for="`detail-channel-${viewingSale.id}`">
+              Moyen de paiement
+            </label>
+            <select
+              :id="`detail-channel-${viewingSale.id}`"
+              :value="paymentChannelForSale(viewingSale)"
+              class="payment-channel-select"
+              :disabled="readOnly || updatingPaymentId === viewingSale.id"
+              @change="
+                pendingPaymentChannels[viewingSale.id] = (
+                  $event.target as HTMLSelectElement
+                ).value as 'cash' | 'om' | 'wave'
+              "
+            >
+              <option
+                v-for="option in PAYMENT_CHANNEL_OPTIONS"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="sale-detail-actions">
+            <button
+              v-if="viewingSale.kind === 'quote'"
+              type="button"
+              class="btn btn--primary btn--sm"
+              :disabled="readOnly || convertingId === viewingSale.id"
+              @click="convertToSale(viewingSale)"
+            >
+              {{
+                convertingId === viewingSale.id
+                  ? "…"
+                  : "Convertir en vente"
+              }}
+            </button>
+            <button
+              v-if="
+                viewingSale.kind !== 'quote' &&
+                viewingSale.paymentStatus === 'unpaid'
+              "
+              type="button"
+              class="btn btn--primary btn--sm"
+              :disabled="readOnly || updatingPaymentId === viewingSale.id"
+              @click="markAsPaid(viewingSale)"
+            >
+              {{
+                updatingPaymentId === viewingSale.id
+                  ? "…"
+                  : "Marquer payé"
+              }}
+            </button>
+            <button
+              v-if="
+                viewingSale.kind === 'sale' &&
+                viewingSale.deliveryStatus === 'not_delivered'
+              "
+              type="button"
+              class="btn btn--primary btn--sm"
+              :disabled="readOnly || updatingDeliveryId === viewingSale.id"
+              @click="markAsDelivered(viewingSale)"
+            >
+              {{
+                updatingDeliveryId === viewingSale.id
+                  ? "…"
+                  : "Marquer livré"
+              }}
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              :disabled="readOnly"
+              @click="startEditSale(viewingSale)"
+            >
+              Modifier
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              :disabled="generatingInvoiceId === viewingSale.id"
+              @click="downloadInvoice(viewingSale)"
+            >
+              {{
+                generatingInvoiceId === viewingSale.id
+                  ? "PDF…"
+                  : viewingSale.kind === "quote"
+                    ? "Devis PDF"
+                    : "Facture PDF"
+              }}
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              :disabled="readOnly || deletingId === viewingSale.id"
+              @click="removeSale(viewingSale)"
+            >
+              {{ deletingId === viewingSale.id ? "…" : "Supprimer" }}
+            </button>
+          </div>
+        </template>
+      </AppModal>
+
       <section id="ventes-historique" class="panel">
         <div class="panel__header-row">
           <h2 class="panel__title">Historique</h2>
@@ -458,36 +705,28 @@ async function removeSale(sale: Sale) {
                 <th>Total</th>
                 <th>Paiement</th>
                 <th>Livraison</th>
-                <th>Canal</th>
-                <th>Notes</th>
-                <th />
               </tr>
             </thead>
             <tbody>
               <tr v-for="sale in displayedSales" :key="sale.id">
-                <td>
+                <td class="sale-table-date">
                   {{ new Date(sale.orderedAt).toLocaleDateString("fr-FR") }}
                 </td>
-                <td>{{ sale.clientName }}</td>
-                <td>
-                  <ul class="sale-items-list">
-                    <li v-for="(item, i) in sale.items" :key="i">
-                      {{ item.quantity }}× {{ item.productName }} ({{ item.volume }})
-                      — {{ formatCfa(item.lineTotal) }}
-                    </li>
-                  </ul>
+                <td class="sale-table-client">{{ sale.clientName }}</td>
+                <td class="sale-order-cell">
+                  <span class="sale-order-preview" :title="orderPreview(sale)">
+                    {{ orderPreview(sale) }}
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
+                    @click="openSaleDetail(sale)"
+                  >
+                    Voir
+                  </button>
                 </td>
                 <td><strong>{{ formatCfa(sale.totalAmount) }}</strong></td>
                 <td class="payment-cell">
-                  <span
-                    v-if="sale.personalization || sale.discountAmount > 0"
-                    class="sale-adjustments"
-                  >
-                    <span v-if="sale.personalization">Perso.</span>
-                    <span v-if="sale.discountAmount > 0">
-                      Remise {{ formatCfa(sale.discountAmount) }}
-                    </span>
-                  </span>
                   <span
                     v-if="sale.kind === 'quote'"
                     class="badge badge--quote"
@@ -518,19 +757,6 @@ async function removeSale(sale: Sale) {
                       }}
                     </button>
                   </template>
-                  <button
-                    v-if="sale.kind === 'quote'"
-                    type="button"
-                    class="btn btn--primary btn--sm payment-cell__action"
-                    :disabled="readOnly || convertingId === sale.id"
-                    @click="convertToSale(sale)"
-                  >
-                    {{
-                      convertingId === sale.id
-                        ? "…"
-                        : "Convertir en vente"
-                    }}
-                  </button>
                 </td>
                 <td class="payment-cell">
                   <template v-if="sale.kind === 'sale'">
@@ -559,62 +785,6 @@ async function removeSale(sale: Sale) {
                     </button>
                   </template>
                   <span v-else>—</span>
-                </td>
-                <td>
-                  <span v-if="sale.paymentStatus === 'paid' && sale.paymentChannel">
-                    {{ paymentChannelLabel(sale.paymentChannel) }}
-                  </span>
-                  <select
-                    v-else-if="sale.kind !== 'quote' && sale.paymentStatus === 'unpaid'"
-                    :value="paymentChannelForSale(sale)"
-                    class="payment-channel-select"
-                    :disabled="readOnly || updatingPaymentId === sale.id"
-                    @change="pendingPaymentChannels[sale.id] = ($event.target as HTMLSelectElement).value as 'cash' | 'om' | 'wave'"
-                  >
-                    <option
-                      v-for="option in PAYMENT_CHANNEL_OPTIONS"
-                      :key="option.value"
-                      :value="option.value"
-                    >
-                      {{ option.label }}
-                    </option>
-                  </select>
-                  <span v-else>—</span>
-                </td>
-                <td>{{ sale.notes || "—" }}</td>
-                <td class="table-actions">
-                  <button
-                    type="button"
-                    class="btn btn--ghost btn--sm"
-                    style="margin-right: 0.35rem"
-                    :disabled="readOnly"
-                    @click="startEditSale(sale)"
-                  >
-                    Modifier
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--ghost btn--sm"
-                    :disabled="generatingInvoiceId === sale.id"
-                    @click="downloadInvoice(sale)"
-                  >
-                    {{
-                      generatingInvoiceId === sale.id
-                        ? "PDF…"
-                        : sale.kind === "quote"
-                          ? "Devis"
-                          : "Facture"
-                    }}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--ghost btn--sm"
-                    style="margin-left: 0.35rem"
-                    :disabled="readOnly || deletingId === sale.id"
-                    @click="removeSale(sale)"
-                  >
-                    {{ deletingId === sale.id ? "…" : "Supprimer" }}
-                  </button>
                 </td>
               </tr>
             </tbody>
@@ -645,5 +815,99 @@ async function removeSale(sale: Sale) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+.sale-table-date {
+  white-space: nowrap;
+}
+
+.sale-table-client {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sale-order-cell {
+  max-width: 11rem;
+}
+
+.sale-order-preview {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+  color: var(--text-soft, #52525b);
+  margin-bottom: 0.25rem;
+}
+
+.sale-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.sale-detail-meta dt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 0.2rem;
+}
+
+.sale-detail-meta dd {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.sale-detail__heading {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.sale-detail__items {
+  margin: 0 0 1rem;
+}
+
+.sale-detail-totals {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--text-soft, #52525b);
+}
+
+.sale-detail-totals__total {
+  margin: 0.35rem 0 0;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.sale-detail-notes {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--text-soft, #52525b);
+}
+
+.sale-detail-channel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.sale-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
 }
 </style>
