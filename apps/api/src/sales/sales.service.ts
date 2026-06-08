@@ -150,10 +150,12 @@ export class SalesService {
     const paid = PrismaSalePaymentStatus.PAID;
 
     const notDelivered = toPrismaSaleDeliveryStatus("not_delivered");
+    const delivered = toPrismaSaleDeliveryStatus("delivered");
 
     const [
       recentRows,
       undeliveredRows,
+      deliveredRows,
       salesToday,
       revenueTodayAgg,
       revenueMonthAgg,
@@ -170,6 +172,14 @@ export class SalesService {
         },
         include: { items: true },
         orderBy: { orderedAt: "asc" },
+      }),
+      this.prisma.sale.findMany({
+        where: {
+          kind: saleKind,
+          deliveryStatus: delivered,
+        },
+        include: { items: true },
+        orderBy: { orderedAt: "desc" },
       }),
       this.prisma.sale.count({
         where: {
@@ -197,11 +207,13 @@ export class SalesService {
 
     const recentSales = recentRows.map(mapSale);
     const undeliveredSales = undeliveredRows.map(mapSale);
+    const deliveredSales = deliveredRows.map(mapSale);
 
     return {
       sales: recentSales,
       recentSales,
       undeliveredSales,
+      deliveredSales,
       salesToday,
       revenueToday: revenueTodayAgg._sum.totalAmount ?? 0,
       revenueMonth: revenueMonthAgg._sum.totalAmount ?? 0,

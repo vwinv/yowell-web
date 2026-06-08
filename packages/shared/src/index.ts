@@ -508,6 +508,7 @@ export type SalesOverview = {
   sales: Sale[];
   recentSales: Sale[];
   undeliveredSales: Sale[];
+  deliveredSales: Sale[];
   salesToday: number;
   revenueToday: number;
   revenueMonth: number;

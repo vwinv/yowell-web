@@ -41,6 +41,13 @@ const paymentStatus = ref(props.sale.paymentStatus);
 const deliveryStatus = ref<SaleDeliveryStatus>(
   props.sale.deliveryStatus ?? "not_delivered",
 );
+
+watch(
+  () => props.sale,
+  (sale) => {
+    deliveryStatus.value = sale.deliveryStatus ?? "not_delivered";
+  },
+);
 const paymentChannel = ref<"cash" | "om" | "wave">(
   props.sale.paymentChannel ?? "cash",
 );

@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { navGroups } from "~/constants/navigation";
 
+defineProps<{
+  open?: boolean;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+}>();
+
 const route = useRoute();
 const { isAdmin } = useAuth();
 
@@ -18,13 +26,25 @@ const visibleGroups = computed(() =>
 function isActive(path: string) {
   return route.path === path;
 }
+
+function onNavigate() {
+  emit("close");
+}
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ 'sidebar--open': open }">
     <div class="sidebar__header">
       <AppLogo size="lg" />
       <p class="sidebar__admin-label">Espace administration</p>
+      <button
+        type="button"
+        class="sidebar__close"
+        aria-label="Fermer le menu"
+        @click="emit('close')"
+      >
+        ×
+      </button>
     </div>
 
     <div
@@ -40,6 +60,7 @@ function isActive(path: string) {
           :to="item.to"
           class="sidebar__link"
           :class="{ 'sidebar__link--active': isActive(item.to) }"
+          @click="onNavigate"
         >
           <span class="sidebar__link-icon">
             <NavIcon :name="item.icon" />

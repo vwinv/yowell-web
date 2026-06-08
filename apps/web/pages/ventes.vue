@@ -18,6 +18,7 @@ const [
 ] = await Promise.all([
   useApiFetch<SalesOverview>(useApiUrl("/sales/overview"), {
     key: "sales-overview",
+    server: false,
   }),
   useApiFetch<ClientsOverview>(useApiUrl("/clients/overview"), {
     key: "clients-overview",
@@ -38,27 +39,34 @@ const SaleEditFormLazy = defineAsyncComponent(
   () => import("~/components/SaleEditForm.vue"),
 );
 
+function findSaleById(id: string): Sale | undefined {
+  return (
+    data.value?.recentSales.find((s) => s.id === id) ??
+    data.value?.undeliveredSales.find((s) => s.id === id) ??
+    data.value?.deliveredSales.find((s) => s.id === id)
+  );
+}
+
 const editingSale = computed<Sale | null>(() => {
   if (!editingSaleId.value) return null;
-  return (
-    data.value?.recentSales.find((s) => s.id === editingSaleId.value) ?? null
-  );
+  return findSaleById(editingSaleId.value) ?? null;
 });
+
+async function refreshSales() {
+  await Promise.all([refresh(), refreshNuxtData("sales-overview")]);
+}
 
 const clientOptions = computed(
   () => clientsData.value?.clients.map((c) => ({ id: c.id, name: c.name })) ?? [],
 );
 
 async function onSaleSuccess() {
-  await Promise.all([
-    refresh(),
-    refreshNuxtData("clients-overview"),
-  ]);
+  await Promise.all([refreshSales(), refreshNuxtData("clients-overview")]);
   showSaleForm.value = false;
 }
 
 async function onQuoteSuccess() {
-  await refresh();
+  await refreshSales();
   showQuoteForm.value = false;
 }
 
@@ -90,7 +98,7 @@ function cancelEditSale() {
 
 async function onSaleEditSuccess() {
   await Promise.all([
-    refresh(),
+    refreshSales(),
     refreshNuxtData("clients-overview"),
     refreshNuxtData("accounting-overview"),
   ]);
@@ -117,7 +125,7 @@ async function convertToSale(sale: Sale) {
       autoReload: false,
     });
     await Promise.all([
-      refresh(),
+      refreshSales(),
       refreshNuxtData("products-for-sales"),
       refreshNuxtData("stock-overview"),
     ]);
@@ -133,6 +141,10 @@ async function convertToSale(sale: Sale) {
 
 function paymentLabel(status: SalePaymentStatus) {
   return status === "paid" ? "Payé" : "Non payé";
+}
+
+function saleDeliveryStatus(sale: Sale): SaleDeliveryStatus {
+  return sale.deliveryStatus ?? "not_delivered";
 }
 
 function deliveryLabel(status: SaleDeliveryStatus) {
@@ -169,20 +181,20 @@ const undeliveredSales = computed(
   () => data.value?.undeliveredSales ?? [],
 );
 
+const deliveredSales = computed(
+  () => data.value?.deliveredSales ?? [],
+);
+
 const undeliveredCount = computed(() => undeliveredSales.value.length);
 
 const displayedSales = computed(() => {
-  const recent = data.value?.recentSales ?? [];
   if (deliveryFilter.value === "undelivered") {
     return undeliveredSales.value;
   }
   if (deliveryFilter.value === "delivered") {
-    return recent.filter(
-      (sale) =>
-        sale.kind === "sale" && sale.deliveryStatus === "delivered",
-    );
+    return deliveredSales.value;
   }
-  return recent;
+  return data.value?.recentSales ?? [];
 });
 
 const emptyHistoryMessage = computed(() => {
@@ -190,7 +202,7 @@ const emptyHistoryMessage = computed(() => {
     return "Aucune livraison en attente.";
   }
   if (deliveryFilter.value === "delivered") {
-    return "Aucune vente livrée dans l'historique récent.";
+    return "Aucune vente livrée.";
   }
   return "Aucune vente enregistrée.";
 });
@@ -208,7 +220,7 @@ async function markAsDelivered(sale: Sale) {
   if (
     !canWrite.value ||
     sale.kind !== "sale" ||
-    sale.deliveryStatus === "delivered"
+    saleDeliveryStatus(sale) === "delivered"
   ) {
     return;
   }
@@ -220,7 +232,7 @@ async function markAsDelivered(sale: Sale) {
         deliveryStatus: "delivered" satisfies SaleDeliveryStatus,
       },
     });
-    await refresh();
+    await refreshSales();
     syncViewingSale(sale.id);
   } finally {
     updatingDeliveryId.value = null;
@@ -229,9 +241,7 @@ async function markAsDelivered(sale: Sale) {
 
 function syncViewingSale(saleId: string) {
   if (!viewingSale.value || viewingSale.value.id !== saleId) return;
-  const updated =
-    data.value?.recentSales.find((s) => s.id === saleId) ??
-    data.value?.undeliveredSales.find((s) => s.id === saleId);
+  const updated = findSaleById(saleId);
   if (updated) viewingSale.value = updated;
 }
 
@@ -247,7 +257,7 @@ async function markAsPaid(sale: Sale) {
       },
     });
     await Promise.all([
-      refresh(),
+      refreshSales(),
       refreshNuxtData("accounting-overview"),
       refreshNuxtData("clients-overview"),
     ]);
@@ -282,7 +292,7 @@ async function removeSale(sale: Sale) {
       closeSaleDetail();
     }
     await Promise.all([
-      refresh(),
+      refreshSales(),
       refreshNuxtData("clients-overview"),
       refreshNuxtData("accounting-overview"),
       refreshNuxtData("products-for-sales"),
@@ -506,12 +516,12 @@ async function removeSale(sale: Sale) {
                   class="badge"
                   :class="{
                     'badge--delivered':
-                      viewingSale.deliveryStatus === 'delivered',
+                      saleDeliveryStatus(viewingSale) === 'delivered',
                     'badge--not-delivered':
-                      viewingSale.deliveryStatus === 'not_delivered',
+                      saleDeliveryStatus(viewingSale) === 'not_delivered',
                   }"
                 >
-                  {{ deliveryLabel(viewingSale.deliveryStatus) }}
+                  {{ deliveryLabel(saleDeliveryStatus(viewingSale)) }}
                 </span>
               </dd>
             </div>
@@ -605,7 +615,7 @@ async function removeSale(sale: Sale) {
             <button
               v-if="
                 viewingSale.kind === 'sale' &&
-                viewingSale.deliveryStatus === 'not_delivered'
+                saleDeliveryStatus(viewingSale) === 'not_delivered'
               "
               type="button"
               class="btn btn--primary btn--sm"
@@ -763,15 +773,16 @@ async function removeSale(sale: Sale) {
                     <span
                       class="badge"
                       :class="{
-                        'badge--delivered': sale.deliveryStatus === 'delivered',
+                        'badge--delivered':
+                          saleDeliveryStatus(sale) === 'delivered',
                         'badge--not-delivered':
-                          sale.deliveryStatus === 'not_delivered',
+                          saleDeliveryStatus(sale) === 'not_delivered',
                       }"
                     >
-                      {{ deliveryLabel(sale.deliveryStatus) }}
+                      {{ deliveryLabel(saleDeliveryStatus(sale)) }}
                     </span>
                     <button
-                      v-if="sale.deliveryStatus === 'not_delivered'"
+                      v-if="saleDeliveryStatus(sale) === 'not_delivered'"
                       type="button"
                       class="btn btn--primary btn--sm payment-cell__action"
                       :disabled="readOnly || updatingDeliveryId === sale.id"

@@ -312,7 +312,10 @@ export function mapSale(sale: PrismaSaleRecord): Sale {
       ? toSharedPaymentChannel(sale.paymentChannel)
       : undefined,
     kind: toSharedSaleKind(sale.kind),
-    deliveryStatus: toSharedSaleDeliveryStatus(sale.deliveryStatus),
+    deliveryStatus:
+      sale.deliveryStatus != null
+        ? toSharedSaleDeliveryStatus(sale.deliveryStatus)
+        : "not_delivered",
     notes: sale.notes,
     createdAt: dateToIso(sale.createdAt),
   };
