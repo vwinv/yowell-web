@@ -280,6 +280,11 @@ export class SalesService {
             paymentStatus === toPrismaSalePaymentStatus("paid") ? "paid" : "unpaid",
             input.paymentChannel,
           );
+      const deliveryStatus = isQuote
+        ? toPrismaSaleDeliveryStatus("not_delivered")
+        : toPrismaSaleDeliveryStatus(
+            input.deliveryStatus === "delivered" ? "delivered" : "not_delivered",
+          );
 
       const sale = await tx.sale.create({
         data: {
@@ -292,6 +297,7 @@ export class SalesService {
           kind: isQuote ? toPrismaSaleKind("quote") : toPrismaSaleKind("sale"),
           paymentStatus,
           paymentChannel,
+          deliveryStatus,
           notes: input.notes?.trim() ?? "",
           items: {
             create: lines.map((line) => ({
@@ -416,6 +422,11 @@ export class SalesService {
               ? toSharedPaymentChannel(existing.paymentChannel)
               : undefined,
           );
+      const nextDeliveryStatus = isQuote
+        ? toPrismaSaleDeliveryStatus("not_delivered")
+        : input.deliveryStatus
+          ? toPrismaSaleDeliveryStatus(input.deliveryStatus)
+          : existing.deliveryStatus;
 
       const sale = await tx.sale.update({
         where: { id },
@@ -428,6 +439,7 @@ export class SalesService {
           discountAmount,
           paymentStatus: nextPaymentStatus,
           paymentChannel,
+          deliveryStatus: nextDeliveryStatus,
           notes: input.notes?.trim() ?? "",
           items: {
             create: lines.map((line) => ({

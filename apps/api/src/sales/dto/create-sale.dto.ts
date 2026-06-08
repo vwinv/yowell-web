@@ -77,4 +77,8 @@ export class CreateSaleDto {
   @IsOptional()
   @IsIn(["sale", "quote"])
   kind?: "sale" | "quote";
+
+  @IsOptional()
+  @IsIn(["delivered", "not_delivered"])
+  deliveryStatus?: "delivered" | "not_delivered";
 }

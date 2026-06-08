@@ -33,6 +33,7 @@ const isQuote = computed(() => props.mode === "quote");
 const clientId = ref("");
 const orderedAt = ref(new Date().toISOString().slice(0, 10));
 const notes = ref("");
+const delivered = ref(false);
 const personalization = ref(false);
 const discountAmount = ref<number | "">("");
 const lines = ref<OrderLine[]>([
@@ -144,6 +145,7 @@ function resetForm() {
   clientId.value = props.clients[0]?.id ?? "";
   orderedAt.value = new Date().toISOString().slice(0, 10);
   notes.value = "";
+  delivered.value = false;
   personalization.value = false;
   discountAmount.value = "";
   lines.value = [{ productId: props.products[0]?.id ?? "", volume: "1L", quantity: 1 }];
@@ -198,7 +200,13 @@ async function submit() {
         personalization: personalization.value,
         discountAmount: discountAmount.value === "" ? 0 : Number(discountAmount.value),
         notes: notes.value.trim(),
-        ...(isQuote.value ? { kind: "quote" as const } : {}),
+        ...(isQuote.value
+          ? { kind: "quote" as const }
+          : {
+              deliveryStatus: delivered.value
+                ? ("delivered" as const)
+                : ("not_delivered" as const),
+            }),
       },
     });
     success.value = isQuote.value
@@ -328,13 +336,20 @@ async function submit() {
       </p>
     </div>
 
+    <div v-if="!isQuote" class="form-field form-field--wide">
+      <label class="format-row__check">
+        <input v-model="delivered" type="checkbox" />
+        <span>Commande déjà livrée</span>
+      </label>
+    </div>
+
     <div class="form-field form-field--wide">
       <label for="sale-notes">Notes</label>
       <input
         id="sale-notes"
         v-model="notes"
         type="text"
-        placeholder="Livraison, paiement, remarques…"
+        placeholder="Paiement, adresse, remarques…"
       />
     </div>
 

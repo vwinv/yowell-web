@@ -527,6 +527,7 @@ export type CreateSaleInput = {
   discountAmount?: number;
   paymentStatus?: SalePaymentStatus;
   paymentChannel?: PaymentChannel;
+  deliveryStatus?: SaleDeliveryStatus;
   kind?: SaleKind;
   notes?: string;
 };
@@ -549,6 +550,7 @@ export type UpdateSaleInput = {
   notes?: string;
   paymentStatus?: SalePaymentStatus;
   paymentChannel?: PaymentChannel;
+  deliveryStatus?: SaleDeliveryStatus;
 };
 
 export function saleTotal(items: SaleLineItem[]): number {

@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { JuiceProduct, JuiceVolume, Sale } from "@yowell/shared";
+import type {
+  JuiceProduct,
+  JuiceVolume,
+  Sale,
+  SaleDeliveryStatus,
+} from "@yowell/shared";
 import {
   SALE_PERSONALIZATION_FEE,
   computeSaleTotalAmount,
@@ -33,6 +38,9 @@ const clientId = ref(props.sale.clientId);
 const orderedAt = ref(props.sale.orderedAt.slice(0, 10));
 const notes = ref(props.sale.notes);
 const paymentStatus = ref(props.sale.paymentStatus);
+const deliveryStatus = ref<SaleDeliveryStatus>(
+  props.sale.deliveryStatus ?? "not_delivered",
+);
 const paymentChannel = ref<"cash" | "om" | "wave">(
   props.sale.paymentChannel ?? "cash",
 );
@@ -184,6 +192,7 @@ async function submit() {
         ...(paymentStatus.value === "paid"
           ? { paymentChannel: paymentChannel.value }
           : {}),
+        ...(!isQuote.value ? { deliveryStatus: deliveryStatus.value } : {}),
       },
     });
     success.value = isQuote.value ? "Devis modifié." : "Vente modifiée.";
@@ -230,6 +239,13 @@ async function submit() {
           >
             {{ option.label }}
           </option>
+        </select>
+      </div>
+      <div v-if="!isQuote" class="form-field">
+        <label for="edit-sale-delivery">Livraison</label>
+        <select id="edit-sale-delivery" v-model="deliveryStatus">
+          <option value="not_delivered">Non livré</option>
+          <option value="delivered">Livré</option>
         </select>
       </div>
     </div>
