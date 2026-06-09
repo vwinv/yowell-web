@@ -8,7 +8,10 @@ import PDFDocument from "pdfkit";
 const BRAND = "Yo'Well";
 const BRAND_TAGLINE = "Jus de fruits naturels";
 const FOOTER_THANKS = "Yo'Well vous remercie pour la confiance !";
-const FOOTER_PAYMENT = "Wave ou OM au 78 681 53 34";
+const PAYMENT_PHONE = "786815334";
+const PAYMENT_PHONE_DISPLAY = "78 681 53 34";
+const PAYMENT_LABEL = `Wave ou OM : ${PAYMENT_PHONE}`;
+const FOOTER_PAYMENT = `Paiement ${PAYMENT_LABEL}`;
 
 /** Montants lisibles en PDF (evite le separateur U+202F de fr-FR affiche comme "/") */
 function formatCfaPdf(amount: number): string {
@@ -123,17 +126,26 @@ export function buildSaleInvoicePdf(sale: Sale, client: Client): Promise<Buffer>
       });
     }
 
+    const docInfoLines =
+      sale.kind === "quote"
+        ? [
+            "Document non engageant",
+            "Valable 30 jours",
+            PAYMENT_LABEL,
+          ]
+        : [
+            `Statut : ${paymentLabel(sale.paymentStatus)}`,
+            PAYMENT_LABEL,
+          ];
+
     doc
       .fontSize(10)
       .fillColor("#444444")
-      .text(
-        sale.kind === "quote"
-          ? "Document non engageant — valable 30 jours"
-          : `Statut paiement : ${paymentLabel(sale.paymentStatus)}`,
-        left + pageWidth - 200,
-        clientY + 18,
-        { width: 200, align: "right" },
-      );
+      .text(docInfoLines.join("\n"), left + pageWidth - 200, clientY + 18, {
+        width: 200,
+        align: "right",
+        lineGap: 2,
+      });
 
     doc.y = Math.max(detailY, clientY + 80) + 20;
 
@@ -245,8 +257,26 @@ export function buildSaleInvoicePdf(sale: Sale, client: Client): Promise<Buffer>
     }
     drawTotalLine("Total", sale.totalAmount, true);
 
+    y += 10;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(10)
+      .fillColor("#0d5c52")
+      .text("Paiement", left, y);
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor("#444444")
+      .text(
+        `Règlement par Wave ou Orange Money (OM)\nNuméro : ${PAYMENT_PHONE} (${PAYMENT_PHONE_DISPLAY})`,
+        left,
+        y + 16,
+        { width: pageWidth, lineGap: 3 },
+      );
+    y += 44;
+
     if (sale.notes.trim()) {
-      y += 36;
+      y += 8;
       doc
         .font("Helvetica-Bold")
         .fontSize(10)
