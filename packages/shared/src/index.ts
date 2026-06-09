@@ -466,6 +466,8 @@ export type CreateClientInput = {
   notes?: string;
 };
 
+export type UpdateClientInput = CreateClientInput;
+
 /** Ventes */
 export const SALE_PERSONALIZATION_FEE = 100;
 

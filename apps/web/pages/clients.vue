@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ClientsOverview } from "@yowell/shared";
+import type { ClientSummary, ClientsOverview } from "@yowell/shared";
 import { formatCfa } from "@yowell/shared";
 
 const { canWrite, readOnly } = useModulePermission("vente_clients");
@@ -10,9 +10,28 @@ const { data, pending, refresh } = await useApiFetch<ClientsOverview>(
 );
 
 const showClientForm = ref(false);
+const editingClient = ref<ClientSummary | null>(null);
 const ClientFormLazy = defineAsyncComponent(
   () => import("~/components/ClientForm.vue"),
 );
+
+function startEditClient(client: ClientSummary) {
+  if (!canWrite.value) return;
+  showClientForm.value = false;
+  editingClient.value = client;
+}
+
+function cancelEditClient() {
+  editingClient.value = null;
+}
+
+async function onClientEditSuccess() {
+  await Promise.all([
+    refresh(),
+    refreshNuxtData("clients-overview"),
+  ]);
+  editingClient.value = null;
+}
 
 async function removeClient(id: string, name: string) {
   if (!canWrite.value) return;
@@ -54,7 +73,7 @@ async function removeClient(id: string, name: string) {
           type="button"
           class="btn btn--primary"
           :disabled="readOnly"
-          @click="showClientForm = true"
+          @click="showClientForm = true; editingClient = null"
         >
           + Nouveau client
         </button>
@@ -71,6 +90,20 @@ async function removeClient(id: string, name: string) {
         <ClientFormLazy
           :readonly="readOnly"
           @success="refresh(); showClientForm = false"
+        />
+      </AppModal>
+
+      <AppModal
+        :open="!!editingClient"
+        :title="editingClient ? `Modifier — ${editingClient.name}` : 'Modifier le client'"
+        @close="cancelEditClient"
+      >
+        <ClientFormLazy
+          v-if="editingClient"
+          :client="editingClient"
+          :readonly="readOnly"
+          @success="onClientEditSuccess"
+          @cancel="cancelEditClient"
         />
       </AppModal>
 
@@ -102,10 +135,18 @@ async function removeClient(id: string, name: string) {
                 <td>{{ c.email || "—" }}</td>
                 <td>{{ c.address || "—" }}</td>
                 <td>{{ c.notes || "—" }}</td>
-                <td>
+                <td class="table-actions">
                   <button
                     type="button"
-                    class="btn btn--ghost"
+                    class="btn btn--ghost btn--sm"
+                    :disabled="readOnly"
+                    @click="startEditClient(c)"
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost btn--sm"
                     :disabled="readOnly"
                     @click="removeClient(c.id, c.name)"
                   >

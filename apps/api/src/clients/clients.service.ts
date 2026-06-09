@@ -5,6 +5,7 @@ import type {
   ClientSummary,
   ClientsOverview,
   CreateClientInput,
+  UpdateClientInput,
 } from "@yowell/shared";
 
 import { mapClient } from "../prisma/prisma.mappers";
@@ -95,6 +96,39 @@ export class ClientsService {
     });
 
     return mapClient(client);
+  }
+
+  async update(id: string, input: UpdateClientInput): Promise<Client> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.client.findUnique({
+        where: { id },
+      });
+      if (!existing) {
+        throw new NotFoundException("Client introuvable");
+      }
+
+      const name = input.name.trim();
+
+      const client = await tx.client.update({
+        where: { id },
+        data: {
+          name,
+          phone: input.phone?.trim() ?? "",
+          email: input.email?.trim() ?? "",
+          address: input.address?.trim() ?? "",
+          notes: input.notes?.trim() ?? "",
+        },
+      });
+
+      if (name !== existing.name) {
+        await tx.sale.updateMany({
+          where: { clientId: id },
+          data: { clientName: name },
+        });
+      }
+
+      return mapClient(client);
+    });
   }
 
   async delete(id: string): Promise<void> {

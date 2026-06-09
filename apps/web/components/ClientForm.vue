@@ -1,14 +1,20 @@
 <script setup lang="ts">
+import type { Client, ClientSummary } from "@yowell/shared";
+
 const props = withDefaults(
   defineProps<{
+    client?: Client | ClientSummary | null;
     readonly?: boolean;
   }>(),
-  { readonly: false },
+  { client: null, readonly: false },
 );
 
 const emit = defineEmits<{
   success: [];
+  cancel: [];
 }>();
+
+const isEdit = computed(() => !!props.client);
 
 const name = ref("");
 const phone = ref("");
@@ -19,6 +25,26 @@ const notes = ref("");
 const submitting = ref(false);
 const error = ref("");
 const success = ref("");
+
+function fillFromClient(client: Client | ClientSummary) {
+  name.value = client.name;
+  phone.value = client.phone;
+  email.value = client.email;
+  address.value = client.address;
+  notes.value = client.notes;
+}
+
+watch(
+  () => props.client,
+  (client) => {
+    if (client) {
+      fillFromClient(client);
+    } else {
+      resetForm();
+    }
+  },
+  { immediate: true },
+);
 
 function resetForm() {
   name.value = "";
@@ -38,23 +64,35 @@ async function submit() {
     return;
   }
 
+  const body = {
+    name: name.value.trim(),
+    phone: phone.value.trim(),
+    email: email.value.trim(),
+    address: address.value.trim(),
+    notes: notes.value.trim(),
+  };
+
   submitting.value = true;
   try {
-    await apiFetch(useApiUrl("/clients"), {
-      method: "POST",
-      body: {
-        name: name.value.trim(),
-        phone: phone.value.trim(),
-        email: email.value.trim(),
-        address: address.value.trim(),
-        notes: notes.value.trim(),
-      },
-    });
-    success.value = "Client enregistré.";
-    resetForm();
+    if (isEdit.value && props.client) {
+      await apiFetch(useApiUrl(`/clients/${props.client.id}`), {
+        method: "PATCH",
+        body,
+      });
+      success.value = "Client modifié.";
+    } else {
+      await apiFetch(useApiUrl("/clients"), {
+        method: "POST",
+        body,
+      });
+      success.value = "Client enregistré.";
+      resetForm();
+    }
     emit("success");
   } catch {
-    error.value = "Impossible d'enregistrer le client.";
+    error.value = isEdit.value
+      ? "Impossible de modifier le client."
+      : "Impossible d'enregistrer le client.";
   } finally {
     submitting.value = false;
   }
@@ -97,9 +135,30 @@ async function submit() {
     </div>
     <div class="form-field form-actions">
       <button type="submit" class="btn btn--primary" :disabled="submitting">
-        {{ submitting ? "Enregistrement…" : "Enregistrer le client" }}
+        {{
+          submitting
+            ? "Enregistrement…"
+            : isEdit
+              ? "Enregistrer les modifications"
+              : "Enregistrer le client"
+        }}
       </button>
-      <button type="button" class="btn btn--ghost" :disabled="submitting" @click="resetForm">
+      <button
+        v-if="isEdit"
+        type="button"
+        class="btn btn--ghost"
+        :disabled="submitting"
+        @click="emit('cancel')"
+      >
+        Annuler
+      </button>
+      <button
+        v-else
+        type="button"
+        class="btn btn--ghost"
+        :disabled="submitting"
+        @click="resetForm"
+      >
         Réinitialiser
       </button>
     </div>
