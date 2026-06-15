@@ -83,6 +83,8 @@ export type StatsDayPoint = {
   profit: number;
 };
 
+export type StatsEvolutionGranularity = "day" | "week" | "month";
+
 export type StatsTopProduct = {
   productName: string;
   quantity: number;
@@ -109,6 +111,7 @@ export type StatsOverview = {
   expenses: number;
   profit: number;
   ordersCount: number;
+  evolutionGranularity: StatsEvolutionGranularity;
   recentDays: StatsDayPoint[];
   topProducts: StatsTopProduct[];
 };

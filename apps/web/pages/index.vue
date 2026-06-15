@@ -32,6 +32,13 @@ const periodLabel = computed(
   () => data.value?.period?.label ?? "Période sélectionnée",
 );
 
+const evolutionSubtitle = computed(() => {
+  const granularity = data.value?.evolutionGranularity;
+  if (granularity === "week") return "Par semaine";
+  if (granularity === "month") return "Par mois";
+  return "Par jour";
+});
+
 function formatAmount(amount: number) {
   if (amount < 0) {
     return `−${formatCfa(Math.abs(amount))}`;
@@ -54,9 +61,7 @@ const chartMax = computed(() => {
 
 const chartColumns = computed(() => {
   const count = data.value?.recentDays.length ?? 7;
-  if (count <= 7) return 7;
-  if (count <= 14) return count;
-  return Math.min(count, 31);
+  return Math.max(1, Math.min(count, 12));
 });
 
 const hasStats = computed(() => Boolean(data.value?.period));
@@ -237,7 +242,10 @@ async function exportPdf() {
       </div>
 
       <section class="panel">
-        <h2 class="panel__title">Évolution — {{ periodLabel }}</h2>
+        <h2 class="panel__title">
+          Évolution — {{ periodLabel }}
+          <span class="chart-subtitle">{{ evolutionSubtitle }}</span>
+        </h2>
         <p class="chart-legend">
           <span class="chart-legend__item chart-legend__item--revenue">Revenus</span>
           <span class="chart-legend__item chart-legend__item--expense">Dépenses</span>

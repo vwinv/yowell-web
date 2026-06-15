@@ -4,6 +4,8 @@ import { join } from "node:path";
 import type { StatsOverview } from "@yowell/shared";
 import PDFDocument from "pdfkit";
 
+import { evolutionGranularityLabel } from "./stats-evolution";
+
 const BRAND = "Yo'Well";
 const BRAND_TAGLINE = "Jus de fruits naturels";
 
@@ -118,7 +120,14 @@ export function buildStatsReportPdf(overview: StatsOverview): Promise<Buffer> {
     }
 
     y += 12;
-    doc.fontSize(12).fillColor("#0d5c52").text("Détail par jour", left, y);
+    doc
+      .fontSize(12)
+      .fillColor("#0d5c52")
+      .text(
+        `Évolution ${evolutionGranularityLabel(overview.evolutionGranularity)}`,
+        left,
+        y,
+      );
     y += 18;
 
     doc.font("Helvetica-Bold").fontSize(8).fillColor("#0d5c52");

@@ -1,11 +1,12 @@
 import { Injectable } from "@nestjs/common";
-import type { StatsDayPoint, StatsOverview, StatsTopProduct } from "@yowell/shared";
+import type { StatsOverview, StatsTopProduct } from "@yowell/shared";
 
 import { AccountingService } from "../accounting/accounting.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
 import { SalesService } from "../sales/sales.service";
 import { buildStatsReportPdf } from "./stats-report.pdf";
 import { eachDayInPeriod, resolveStatsPeriod, type StatsPeriodInput } from "./stats-period";
+import { buildEvolutionPoints } from "./stats-evolution";
 
 @Injectable()
 export class StatsService {
@@ -95,18 +96,9 @@ export class StatsService {
       }
     }
 
-    const recentDays: StatsDayPoint[] = [...dayMap.entries()].map(
-      ([date, totals]) => ({
-        date,
-        label: new Date(date).toLocaleDateString("fr-FR", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-        }),
-        revenue: totals.revenue,
-        expenses: totals.expenses,
-        profit: totals.revenue - totals.expenses,
-      }),
+    const { granularity, points: recentDays } = buildEvolutionPoints(
+      dayMap,
+      period.preset,
     );
 
     const topProducts: StatsTopProduct[] = [...productMap.entries()]
@@ -124,6 +116,7 @@ export class StatsService {
       expenses,
       profit: revenue - expenses,
       ordersCount,
+      evolutionGranularity: granularity,
       recentDays,
       topProducts,
     };

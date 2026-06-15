@@ -498,6 +498,16 @@ a {
   font-size: 0.82rem;
 }
 
+.chart-subtitle {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .chart-legend__item {
   display: inline-flex;
   align-items: center;
